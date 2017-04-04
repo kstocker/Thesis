@@ -332,8 +332,7 @@ SR_plot(boston)
 IR_plot(boston)
 rho_plot(boston)
 
-#New York Reconstruction
-start <- Sys.time()
+#New York Reconstruction (12.52898 mins run time)
 scale_optim_ny <- optim_bandwidth(newyork)
 
 newyork <- local_regression(newyork, scale_optim_ny)
@@ -341,7 +340,9 @@ newyork <- local_regression(newyork, scale_optim_ny)
 SR_plot(newyork)
 IR_plot(newyork)
 rho_plot(newyork)
-Sys.time() - start
+
+bayes_data_ny <- bayes_data(newyork)
+ny_bayes <- run_bayes(bayes_data_ny)
 ```
 
 ```{r Bayes Inference, include=FALSE}
@@ -467,15 +468,6 @@ parameters {
 	real<lower=0, upper=200> beta[26];
 }
 
-transformed parameters {
-  real<lower=0, upper=200> betaseq[26*21];
-  for(n in 1:26){
-  for(m in 0:20){
-betaseq[n + 26*m] = beta[n];
-  }
-}
-}
-
 model {
 	//priors
   Sbar ~ normal(P[1]/3, P[1]/10);
@@ -483,11 +475,13 @@ model {
 
 	//likelihood
 	for (n in 2:N){
-		I[n] ~ neg_binomial_2(beta[n%26-1]*(I[n-1]^.975)*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
-	}
+  I[n] ~ neg_binomial_2(beta[n%26+1]*(I[n-1]^.975)*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+  }
 }    ") 
 
-bayes_z <- stan(model_code = Stan_z_mod, data=boston_data, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
+start<-Sys.time()
+bayes_z <- stan(model_code = Stan_z_mod, data=bayes_data_ny, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
+Sys.time() - start
 ```
 
 To do (4/4/17):
