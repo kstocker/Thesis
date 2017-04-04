@@ -1,0 +1,61 @@
+\documentclass{article}
+
+\title{Thesis Notes}
+\date{2016-11-06}
+\author{Kaitlyn Stocker}
+
+\begin{document}
+
+\maketitle
+\pagenumbering{gobble}
+\newpage
+\pagenumbering{arabic}
+
+\section{Weekly Updates}
+
+Notes about my progress every week. 
+
+\subsection{Week 1, October 5 2016}
+
+\paragraph{What I did:}
+
+Read chapters 1 and 2 of Modeling Infectious Diseases in Humans and Animals by Matt J. Keeling and Pejman Rohani. 
+
+\paragraph{Summary:}
+
+Infectious diseases can be split up into various classifications. They can caused by microparasites or macroparasites, and they can be directly or indirectly transmitted. For my thesis, I will be focusing on directly transmitted microparasites, meaning that I am looking at single-cell pathogens that are transmitted through direct contact with an infected individual. The microparasitic classification also means that the density of pathogens within an infected individual is of no concern - for modeling purposes, an individual is either infected or they are not. 
+
+When modeling infectious diseases, individuals are classified based on their ability to transmit or contract the disease. Susceptible individuals are those who have never contracted the disease and are therefore susceptible to contract it. Exposed individuals are those who have been exposed to an infection, but who are not yet contageous due to low levels of the pathogen. Infected individuals are those who are infected with the pathogen and who are able to transmit the disease. Recovered individuals are those who were once infected, but who have recovered and are no longer able to contract the disease. 
+
+The purpose of modeling is to learn about how diseases spread and operate, and to inform prevention methods to control infectious diseases. 
+
+Mathematical models of infectious diseases are conceptual tools that attempt to explain how an infectious disease will be have in a population. 
+
+TO BE CONTINUED
+
+\subsection{Week 2, October 12, 2016}
+
+\paragraph{What I did:}
+
+I used a the Epimodel package in R to simulate the proportion of infected and susceptible individuals over time for various deterministic, continuous time models of infectious disease transmission. I started by looking at closed populations for the sake of simplicity. 
+
+I plotted a basic SI model, and the "Influenza at a Boarding School" SIR example taken from page 26 of the book (Modeling Infectious Diseases in Humans and Animals). I also looked at an SEIR model with parameters taken from EpiModel's website. 
+
+\subsection{Week 3, October19, 2016}
+
+    \paragraph{What I did:}
+    I used the deSolve package to simulate the influenza at a boarding school example from Keeling and Rohani's book. I used a deterministic, continuous time model with beta and gamma as parameters. 
+
+\subsection{Week 4, October 26, 2016}
+	
+	\paragraph{What I did:}
+	I added stochasticity to my SIR model by using a chain binomial model. I used the initial conditions and parameters from the influenza at a boarding school example from the previous week. I also read about susceptible reconstruction (reference 2), and looked into ABC. 
+
+\subsection{Week 5, November 3, 2016}
+	\paragraph{What I did:}
+	I used MLE to do inference on my chain binomial model. I wrote the likelihood function for the chain binomial model, then ran the optimize function in R on the negative log likelihood function to find an estimate for beta. I also looked at a paper on the Tycho database website, about seasonally fluctuation betas for the measles virus in various cities in the United States and Europe. I looked into using 
+    
+
+
+
+\end{document}

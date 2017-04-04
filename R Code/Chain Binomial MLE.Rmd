@@ -1,0 +1,142 @@
+---
+title: "Chain Binomial MLE"
+author: "Kaitlyn Stocker"
+date: "11/7/2016"
+output: html_document
+---
+
+
+```{r}
+#SIMULATE
+Sim <- function(beta, n, i.now, s.now, r.now, time.steps) {
+
+results <- as.data.frame(matrix(c(0, i.now, s.now, r.now), nrow=1))
+names(results) <- c("time", "I", "S", "R")
+
+  for(j in 1:time.steps){
+    i.next <- rbinom(1, s.now, 1-exp(-beta*i.now/n))
+    s.now <- s.now - i.next
+    r.now <- r.now + i.now
+    i.now <- i.next
+    results <- rbind(results, c(j, i.now, s.now, r.now))
+  }
+return(results)
+}
+
+
+#PLOT
+plot_sim <- function(results){
+  ggplot(results, aes(x=time)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  ggtitle("Chain Binomial SIR Simulation")+
+  labs(x="Time Steps", y="Number of Individuals")
+}
+
+#ESTIMATE
+MLE <- function(beta1, results){
+likelihood <- function(beta1, results) {
+  z <- 0
+  for(j in 2:time.steps){
+    p <- (1-exp(-beta1*results$I[j-1]/n)) #probability of infection 
+    z <- z - log(p^results$I[j] * (1-p)^results$S[j]) #negative log likelihood
+  }
+  return(z)
+}
+#MLE <- optim(par=beta1, fn=likelihood, method="Brent", lower=0, upper=3, results=results)
+MLE <- optimise(likelihood, lower=0, upper=3, results=results)
+return(MLE)
+}
+
+likelihood <- function(beta1, results) {
+  z <- 0
+  out <- c(z)
+  for(j in 2:time.steps){
+    p <- (1-exp(-beta1*results$I[j-1]/n)) #probability of infection 
+    z <- z - log(p^results$I[j] * (1-p)^results$S[j]) #negative log likelihood
+    out <- cbind(out, z)
+  }
+  out<-as.vector(out)
+  return(out)
+}
+
+plot_likelihood <- function(likelihood){
+  ggplot(MLE, aes(x=seq(1, 3, length.out=24)))+
+    geom_line(aes(likelihood))
+}
+```
+
+```{r}
+#Simulating
+i.now <- 3
+s.now <- 760
+r.now <- 0
+time.steps <- 25
+beta <- 1.66
+n <- 763
+
+results <- Sim(beta=beta, n=n, i.now=i.now, s.now=s.now, r.now=r.now, time.steps)
+
+
+#Plotting Simulation
+plot_sim(results)
+
+#Estimating
+beta1 <- 1
+estimate <- MLE(beta1=beta1, results)
+estimate
+likelihood1 <- likelihood(beta1=beta1, results)
+plot_likelihood(likelihood1)
+```
+
+
+```{r}
+
+### TRYING DIFFERENT PROBABILITY OF SUCCESS IN BINOMIAL SIMULATION#### 
+Sim2 <- function(beta, n, i.now, s.now, r.now, time.steps) {
+
+results <- as.data.frame(matrix(c(0, i.now, s.now, r.now), nrow=1))
+names(results) <- c("time", "I", "S", "R")
+
+  for(j in 1:time.steps){
+    i.next <- rbinom(1, s.now, beta*i.now/n)
+    s.now <- s.now - i.next
+    r.now <- r.now + i.now
+    i.now <- i.next
+    results <- rbind(results, c(j, i.now, s.now, r.now))
+  }
+return(results)
+}
+
+results <- Sim2(beta=beta, n=n, i.now=i.now, s.now=s.now, r.now=r.now, time.steps)
+
+plot_sim <- function(results){
+  ggplot(results, aes(x=time)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  ggtitle("Chain Binomial SIR Simulation")+
+  labs(x="Time Steps", y="Number of Individuals")
+}
+
+plot_sim(results)
+
+plot_likelihood <- function(likelihood){
+  ggplot(likelihood, aes(x=seq(1, 3, length.out=24)))+
+    geom_line(aes(y=out))
+}
+
+plot_likelihood(likelihood1)
+time <- seq(1,3, length.out=25)
+df<-data.frame(time, likelihood1)
+
+ggplot(df, aes(x=time)) +
+  geom_line(aes(y=likelihood1), col="red")+
+  labs(x="Beta", y="Likelihood of Beta")+
+  ggtitle("MLE Estimation of Beta")+
+  scale_x_continuous(breaks=seq(1,3, by=.1))
+ 
+```
+
+

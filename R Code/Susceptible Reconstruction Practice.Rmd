@@ -1,0 +1,187 @@
+---
+title: "Susceptible Reconstruction Practice"
+author: "Kaitlyn Stocker"
+date: "1/11/2017"
+output: html_document
+---
+
+```{r, include=FALSE}
+library(rstan)
+```
+
+Simulate TSIR Model with Births 
+```{r}
+Sim <- function(beta, n.now, i.now, s.now, r.now, b.now) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now, b.now, n.now), nrow=1))
+names(results) <- c("I", "S", "R", "B", "N")
+  while(s.now*i.now >0){
+    i.next <- rnbinom(n=1, mu=beta*i.now*s.now/n.now, size=i.now)
+    s.now <- s.now - i.next + b.now
+    r.now <- r.now + i.now
+    b.now <- rgamma(1, shape=2, scale=.000215)*n.now
+    n.now <- n.now + b.now 
+    i.now <- i.next
+    results <- rbind(results, c(i.now, s.now, r.now, b.now, n.now))
+  }
+return(results)
+}
+
+#Initial Conditions 
+n.now <- 76300000
+s.now <- 76299990
+i.now <- n.now-s.now
+r.now <- 0
+beta <- 1.66
+birthrate <- rgamma(1, shape=2, scale=.000215)
+b.now <- 0
+```
+
+Plot of Simulation: 
+```{r, echo=FALSE}
+simdata <- Sim(beta=beta, n.now=n.now, i.now=i.now, s.now=s.now, r.now=r.now, b.now=b.now)
+
+T<- cumsum(rexp(length(simdata$I), rate=(1/2.2)))
+ggplot(simdata, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "TSIR Simulation")
+```
+
+
+Reconstructing Susceptible Data
+```{r, echo=FALSE}
+cumbirths <- cumsum(simdata$B)
+cuminfecteds <- cumsum(simdata$I)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cuminfecteds), nrow=length(cuminfecteds)))
+names(cumulativeinfo) <- c("cumbirths", "cuminfecteds")
+
+
+#plot(cumbirths ~ cuminfecteds)
+
+regression <- lm(cumbirths ~ 1, offset=(cuminfecteds))
+summary(regression)
+
+Z <- as.vector(resid(regression))
+#summary(Z)
+
+ggplot(simdata) +
+  geom_point(aes(x=Z, y=S)) +
+  labs(x="Reconstructed Susceptible Data", y="Simulated Susceptible Data", title="Reconstruction Regression")
+
+ggplot(simdata, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=Z, col="Z"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs Simulated Susceptible Data")
+
+reconstruction <- lm(simdata$S ~ Z)
+summary(reconstruction)
+
+```
+
+
+```{r, echo=FALSE}
+I <- simdata$I
+It <- head(tail(simdata$I, 51), 50) #I[t]
+Itm1 <- head(simdata$I, 50) #I[t-1]
+Ztm1 <- head(Z, 50)
+
+regression2 <- lm(log(It) ~ log(Itm1) + Ztm1)
+summary(regression2)
+
+Zcoef <- regression2$coefficients[3]
+
+S_reconstructed <- 1/Zcoef + Z
+
+ggplot(simdata, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_reconstructed, col="S_reconstructed"))+
+  geom_line(aes(y=Z, col="Z"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Data")
+
+
+```
+
+```{r}
+#Trying Autogregressive Model Fit 
+I <- simdata$I
+It <- head(tail(simdata$I, 51), 50) #I[t]
+Itm1 <- head(simdata$I, 50) #I[t-1]
+Ztm1 <- head(Z, 50)
+r <- rep(1.66, length.out=length(It))
+
+regression1 <- lm(log(It) ~ log(Itm1) + Ztm1)
+regression2 <- lm(log(It) ~ log(r) + log(Itm1) + Ztm1)
+summary(regression2)
+summary(regression1)
+
+Zcoef <- regression1$coefficients[3]
+
+S_reconstructed <- 1/Zcoef + Z
+
+ggplot(simdata, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_reconstructed, col="S_reconstructed"))+
+  geom_line(aes(y=Z, col="Z"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Data")
+```
+
+
+```{r, include=FALSE}
+#Pull vector of population size from simdata and calculate time_added
+n <- simdata$N
+births <- simdata$B
+S_sim <- simdata$S
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+data_sim <- list(N=length(I), P=as.integer(n), I=as.integer(I), S=as.integer(S_sim), time_added=time_added)
+data_reconstructed <- list(N=length(I), P=as.integer(n), I=as.integer(I), S=as.integer(S_reconstructed), time_added=time_added)
+
+#Run Bayes with Reconstructed Data
+SIRstancode <- as.character("
+                            data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+  real time_added[N];
+	int <lower=0> I[N];
+	int <lower=0> S[N];
+}
+
+
+parameters {
+	real<lower=0, upper=5> beta;
+  real<lower=0, upper=5> gamma;
+
+}
+
+model {
+	//priors
+	beta ~ gamma(3, 1);
+  gamma ~ gamma(2,1);
+	//likelihood
+	for (n in 2:N){
+		I[n] ~ neg_binomial_2(beta*I[n-1]*S[n-1]/P[n-1], I[n-1]);
+    time_added[n]~exponential_log(gamma);
+  }
+}
+
+                            ")
+
+bayes_sim <- stan(model_code = SIRstancode, data=data_sim, iter=500000, chains=4)
+bayes_reconstructed <- stan(model_code = SIRstancode, data=data_reconstructed, iter=500000, chains=4)
+
+
+```
+
+```{r}
+bayes_sim
+
+
+bayes_reconstructed
+```
+
+

@@ -1,0 +1,105 @@
+---
+title: "Test"
+author: "Kaitlyn Stocker"
+date: "10/29/2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(deSolve)
+library(ggplot2)
+
+SIRsim <- function (parameters = NULL, initial = NULL, time = NULL, ...) ## parameters should be a vector of beta and gamman, initial should be a vector of S(o), T(o), R(o), and time should be start time, end time, dt.
+{
+  evalODE <- function(parameters = NULL, initial = NULL, time = NULL) {
+    diff_eqs <- function(time, initial, parameters) { # diff equations for SIR
+      with(as.list(c(initial, parameters)), {
+        dS <- -beta * S * I
+        dI <- beta * S * I - gamma * I
+        dR <- gamma * I
+        list(c(dS, dI, dR)) # output them as a list
+      })
+    }
+    
+    eval <- ode(times = time, func = diff_eqs, y = initial, # solve the ode using euler method
+                  parms = parameters, method = "euler", ...)
+    return(eval) # evalODE returns the solved ODE's given the parameters/conditions
+  }
+  output <- evalODE(parameters,initial,time) # save the output of evalODE
+  return(list(model = evalODE, pars = parameters, init = initial, 
+              time = time, results = as.data.frame(output))) # return as a list with other columns
+}
+
+plotSIR <- function(output) { # output should be a dataframe (or list) output from SIRsim
+  ggplot(output$results, aes(time)) + 
+    geom_line(aes(y = S, color = "S")) + 
+    geom_line(aes(y = I, color = "I")) +
+    geom_line(aes(y = R, color = "R")) +
+    labs(x="Time (days)", y= "Proportion")
+}
+```
+
+
+```{r}
+estimateBeta <- function(data, beta, gamma, initial, time) {
+  j = 0
+  i = 1
+  emptyMatrix = matrix(,nrow=((3/.01)+1),ncol=2) # create empty matrix of the correct size
+  tempVar = beta # set initial beta equal to a temp variable
+  
+  while (beta <= [[tempVar + 3]]) { # loop through betas until you get to initial beta plus 3
+    SSBeta = 0 # (re)initialize SS to be zero
+    parameters <- c(beta = beta, gamma = gamma) # save new beta as it goes through the loop
+    sim <- SIRsim(parameters,initial,time) # solve the ODE's given that beta
+    for (j in seq(1,nrow(data$results))) { # loop through each t to compute the residuals
+      SSBeta = SSBeta + (sim$results$I[j] - data$results$I[j])^2
+    }
+    emptyMatrix[i,] <- c(beta, SSBeta) # put beta and SSbeta into the matrix
+    i = i + 1 # update row of matrix
+    j = 0 # reset j to be zero
+    beta = beta + .01 # .05 is arbitrary, will probably make it into a parameter of the function so it can be changed easily
+  }
+  colnames(emptyMatrix) <- c("Beta", "SSBeta") # change the col names
+  return(emptyMatrix)
+}
+
+graphBetaEstimates <- function(matrix) { # takes matrix of betas and SSBeta
+  tempDF <- as.data.frame(betaMatrix)
+  ggplot(tempDF, aes(Beta)) + 
+    geom_line(aes(y = SSBeta, color = "SSBeta")) + 
+    labs(x="Beta", y= "SSBeta") +
+    scale_x_continuous(breaks = scales::pretty_breaks(n = 20)) # set x-scale to be something smaller than default
+}
+```
+
+
+```{r}
+### Simulating
+parameters <- c(beta = 1.66, gamma = (1/2.2)) # Beta, Gamma
+initial <- c(S = (760/763), I = (3/763), R = 0) # S(o), I(o), R(o)
+time <- seq(0,15,.1) # T0 to T by dt
+influenzaTest <- SIRsim(parameters,initial,time)
+influenzaTest
+
+### Testing that it worked correctly
+check100(influenzaTest,.000001)
+
+## Plotting
+plotSIR(influenzaTest)
+
+betaMatrix <- estimateBeta(influenzaTest, 0, (1/2.2), initial, time)
+graphBetaEstimates(betaMatrix)
+
+##Optimize Beta Function to Find Beta: 
+
+#mle(estimateBeta, start=list(beta=0, gamma=(1/2.2)), fixed=list(gamma=(1/2.2)), method ="Brent", lower=0, upper=6)
+
+optim(fn=estimateBeta, par=c(beta=0), initial=initial, time=time, beta=0, gamma=(1/2.2), method="BFGS")
+
+mle2(minuslogl = estimateBeta, start=list(beta=0), data=list(initial=initial, time=time, gamma=(0/2.2)))
+```
+

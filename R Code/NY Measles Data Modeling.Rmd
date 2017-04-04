@@ -1,0 +1,506 @@
+---
+title: "New York Measles Data"
+author: "Kaitlyn Stocker"
+date: "2/8/2017"
+output: html_document
+---
+
+```{r Load Libraries, include=FALSE}
+start <- Sys.time()
+library(dplyr)
+library(rstan)
+library(locfit)
+```
+```{r Pull in Data, echo=FALSE}
+#Read in Measles Data from Tycho Paper 
+measles <- read.csv(file = "/Users/Kaitlyn/Documents/Thesis Work /Datasets/measlesUKUS.csv", header=TRUE, stringsAsFactors = FALSE)
+
+#Select New York Data 1920-1940, add index, select relevant variables 
+newyork <- measles %>%
+  filter(year>1919 & year <1941) %>%
+  filter(loc == "NEW YORK") %>%
+  select(biweek, year, cases, pop, rec) %>%
+  mutate(number = seq(1, 546, 1))
+
+#Look at case data 
+ggplot(newyork, aes(x=number)) + 
+  geom_line(aes(y=cases))
+
+#sum(is.na(newyork)) #no NA's! Sweet
+
+#Pull in Paper Beta Results
+measles_betas <- read.csv(file = "/Users/Kaitlyn/Documents/Thesis Work /Datasets/measeles biweekly betas.csv", header=TRUE, stringsAsFactors=FALSE)
+
+ny_betas <- measles_betas %>%
+  filter(city == "NEW YORK") %>%
+  select(contains("biweek"))
+
+ny_betas <- unname(unlist(ny_betas[1,]))
+
+```
+```{r SR linear and loess, echo=FALSE}
+#Susceptible Reconstruction - The Old Way
+cumbirths <- cumsum(newyork$rec)
+cumcases <- cumsum(newyork$cases)
+# cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cumcases), nrow=length(cumcases)))
+# names(cumulativeinfo) <- c("cumbirths", "cumcases")
+
+regression_linear <- lm(cumbirths ~ cumcases) 
+summary(regression_linear)
+Z_linear <- as.vector(resid(regression_linear))
+#I <- newyork$cases*4.544 #Reconstructing Infected Class based on Coef of cumcases
+
+
+#Plot Z - suffers local deviations from mean
+ggplot(newyork, aes(x=number))+
+  geom_line(aes(y=Z_linear))
+
+#Try Local Linear Regression 
+#regression_local <- loess(cumbirths~cumcases, span=.1, degree=0) #curve looks similar but without local shifts from mean :) 
+# summary(regression_local)
+
+#Z_local <- as.numeric(residuals(regression_local))
+
+# ggplot(newyork, aes(x=number)) +
+#   geom_line(aes(y=Z_linear, col="Z_linear")) +
+#   geom_line(aes(y=Z_local, col="Z_local"))
+
+
+#Susceptible Reconstruction - The Old Way, Forcing Intercept at 0
+# regression3 <- nls(cumbirths~a + b*cumcases ,algorithm="port",
+#    start=c(a=0, b=2.7),lower=c(a=0, b=1),upper=c(a=0, b=5)) 
+
+# Z3 <- as.vector(resid(regression3))
+# 
+# ggplot(newyork, aes(x=number)) +
+#   geom_line(aes(y=Z3))
+
+#Using Paper Method with Fixed, Known, Mean Proportion of Susceptibles to Reconstruct Susceptibles
+# S_reconstructed0 <- 0
+# for(i in 1:length(newyork$number)){
+#   S_reconstructed0[i]<-.035*newyork$pop[i] + Z3[i]
+# }
+
+
+
+# #Plot Reconstructed Epidemic Dynamics
+# ggplot(newyork, aes(x=number)) +
+#   geom_line(aes(y=S_reconstructed, col="S_reconstructed"))+
+#   geom_line(aes(y=S_reconstructed0, col="S_reconstructed0"))+
+#   #geom_line(aes(y=I, col="I"))
+# 
+# #Plot Susceptible Reconstruction 
+# ggplot(newyork, aes(x=number)) +
+#   geom_line(aes(y=S_reconstructed, col="S_reconstructed"))+
+#   geom_line(aes(y=S_test, col="S_test"))
+```
+```{r Local Regression, echo=FALSE}
+#Step 1: define window width "m" such that for each focal x, we select the m nearest neighbors in terms of x value. Window Width is somewhat arbitrary - I'm going to try 10% of the data (so m=547*.1=55)
+
+ord <- order(cumcases)
+c.cases <- cumcases[ord] #order cumbirths from least to greatest
+c.births <- cumbirths[ord] #order cumcases from least to greatest SAME AS CUMCASES AND CUMBIRTHS
+
+m <- floor(length(cumcases)*(.5)) #window width
+h <- m/2
+
+x0<-0
+diffs<-matrix(nrow=length(cumcases), ncol=length(cumcases))
+which.diff<-0
+x.n <- matrix(nrow=length(cumcases), ncol=m)
+y.n <- matrix(nrow=length(cumcases), ncol=m)
+for(i in 1:length(cumcases)){
+x0[i] <- c.cases[i] #set focal x 
+diffs[i,] <- abs(c.cases - x0[i]) #difference between each datapoint and x0 (x value difference)
+which.diff[i] <- sort(diffs[i,])[m] #This returns the mth smallest difference between c.births and x0. 
+
+x.n[i,] <- c.cases[diffs[i,] <= which.diff[i]] #select 55 closest x values to focal x
+y.n[i,] <- c.births[diffs[i,] <= which.diff[i]] #select 55 closest corresponding y valeus 
+}
+
+#Create Weighting Function using Tricube Weights Method and Gaussian 
+tricube <- function(z) {
+  ifelse(abs(z)<1, (1-(abs(z))^3)^3, 0)
+}
+
+gaussian_kernel <- function(x) {
+  (1/sqrt(2*pi))*exp(-x^2/2)
+}
+
+gaussian_sum <- function(i) {
+  gaussian_sum <- 0
+  for(k in 1:m){
+      gaussian_sum <- sum(gaussian_kernel((x.n[i,k]-x0[i])/which.diff[i]))
+      return(gaussian_sum)
+    }
+}
+
+
+#Obtain Weighted Means for each focal x and run regression to obtain coefficients for each (tricube)
+x.wt.tri <- matrix(nrow=length(cumcases), ncol=m)
+x.coeffs.tri <- 0
+for(i in 1:length(cumcases)){
+  for(k in 1:m){
+x.wt.tri[i,k]<- tricube(z=(x.n[i,k] - x0[i])/which.diff[i])
+x.coeffs.tri[i] <- as.numeric(coef(lm(y.n[i,]~x.n[i,], weights = x.wt.tri[i,]))[2]) #pulls the slope for each xi
+}
+}
+
+#Obtain Weighted Means for each focal x and run regression to obtain coefficients for each (gaussian)
+x.wt.gaus <- matrix(nrow=length(cumcases), ncol=m)
+x.coeffs.gaus <- 0
+for(i in 1:length(cumcases)){
+  for(k in 1:m){
+x.wt.gaus[i,k]<- gaussian_kernel(x=(x.n[i,k] - x0[i])/which.diff[i])/gaussian_sum(i)
+x.coeffs.gaus[i] <- as.numeric(coef(lm(y.n[i,]~x.n[i,], weights = x.wt.gaus[i,]))[2]) #pulls the slope for each xi
+}
+}
+
+
+reg.local2 <- lowess(cumcases, cumbirths, f=.5, iter=0)
+
+Z_local2 <- cumbirths - reg.local2$y
+
+ggplot(newyork, aes(x=number)) +
+  geom_line(aes(y=Z_local2, col="Z_local2")) +
+  # geom_line(aes(y=Z_local, col="Z_local")) +
+  geom_line(aes(y=Z_linear, col="Z_linear"))+
+  labs(x="biweek", y="reconstructed Z", title="Comparison of Reconstruction Methods")
+
+#reconstruct infected dynamics using coefficients from local regression 
+I_rec <-newyork$cases * x.coeffs
+
+ggplot(newyork, aes(x=number))+
+  geom_line(aes(y=I_rec, col="I_rec"))+
+  geom_line(aes(y=cases, col="cases"))
+  
+
+```
+```{r Bayes on Reconstructed Data, include=FALSE}
+#Bayes Inference on Betas and Sbar
+data_z <- list(N=length(Z_local2), P=as.integer(newyork$pop), I=as.integer(I_rec), Z=as.integer(Z_local2))
+
+Stan_z <- as.character("
+data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+	int <lower=0> I[N]; // infecteds
+	int  Z[N]; // Zt
+}
+
+parameters {
+  real <lower=P[1]/1000, upper= P[N]> Sbar;
+	real<lower=0, upper=200> beta[26];
+}
+
+transformed parameters {
+  real<lower=0, upper=200> betaseq[26*21];
+  for(n in 1:26){
+  for(m in 0:20){
+betaseq[n + 26*m] = beta[n];
+  }
+}
+}
+
+model {
+	//priors
+  Sbar ~ normal(P[1]/3, P[1]/10);
+	beta[26] ~ gamma(10,4);
+
+	//likelihood
+	for (n in 2:N){
+		I[n] ~ neg_binomial_2(betaseq[n-1]*(I[n-1]^.975)*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+	}
+}    ") 
+
+bayes_z <- stan(model_code = Stan_z, data=data_z, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
+```
+```{r Finish SR using Bayes Output, echo=FALSE}
+#Plot S_reconstructed
+Sbar <- extract(bayes_z, 'Sbar')
+Sbar <- unlist(Sbar, use.names=FALSE)
+lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+
+S_lower <- lowlim_Sbar + Z_local2
+S_upper <- uplim_Sbar + Z_local2
+
+ggplot(newyork, aes(x=number))+
+  geom_line(aes(y=S_lower, col="S_lower"))+
+  geom_line(aes(y=S_upper, col="S_upper"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed Susceptible Dynamics")
+```
+```{r Bayes on Bad Reconstruction, eval=FALSE, include=FALSE}
+#reconstruct susceptible dynamics using paper assumption that mean proportion of S=0.035
+S_reconstructed <- 0
+for(i in 1:length(newyork$number)){
+  S_reconstructed[i]<-.035*newyork$pop[i] + Z[i]
+}
+
+#Bayes Inference on Betas - use reconstructed S
+data_sr <- list(N=length(I), P=as.integer(newyork$pop), I=as.integer(I), S=as.integer(S_reconstructed))
+
+Stan_sr <- as.character("
+data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+	int <lower=0> I[N]; // infecteds
+	int  S[N]; // S_reconstructed
+}
+
+parameters {
+	real<lower=0, upper=200> beta[26];
+}
+
+transformed parameters {
+  real<lower=0, upper=200> betaseq[26*21];
+  for(n in 1:26){
+  for(m in 0:20){
+betaseq[n + 26*m] = beta[n];
+  }
+}
+}
+
+model {
+	//priors
+	beta[26] ~ gamma(10,4);
+
+	//likelihood
+	for (n in 2:N){
+		I[n] ~ neg_binomial_2(betaseq[n-1]*(I[n-1]^.975)*S[n-1]/P[n-1], I[n-1]);
+	}
+}    ") #NOTE: added ^.975 after running for the first time
+
+bayes_sr <- stan(model_code = Stan_sr, data=data_sr, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
+```
+```{r Print Bayes, echo=TRUE}
+bayes_z
+```
+```{r Check Accuracy, echo=FALSE}
+#Check Accuracy
+ny_betas_bayes <- extract(bayes_z, permuted=TRUE)
+beta_ <- ny_betas_bayes$beta
+
+beta<- matrix(nrow=1000000, ncol=26)
+for(i in 1:26){
+  beta[,i] <- beta_[,i]
+}
+
+lowlimbeta_sr <- c()
+uplimbeta_sr <- c()
+containbeta_sr <- c()
+
+for(i in 1:26){lowlimbeta_sr[i] <- quantile(beta[,i], probs=.025, names=FALSE)
+              uplimbeta_sr[i] <- quantile(beta[,i], probs=.975, names =FALSE)
+              containbeta_sr[i]<- ifelse(lowlimbeta_sr[i] <= ny_betas[i] & uplimbeta_sr[i] >=ny_betas[i], 1, 0)
+}
+
+print(containbeta_sr)
+
+# #Pull Median Value from posterior of each beta
+# ny_beta_estimate <- c()
+# for(i in 1:26){
+#   ny_beta_estimate[i] <- quantile(beta[,i], probs=.5, names = FALSE)
+# }
+# 
+# #take difference of paper values and my estimates
+# ny_beta_resid <- ny_beta_estimate - ny_betas
+
+Sys.time() - start
+
+print(ny_betas)
+```
+
+
+```{r Forward Sim, eval=FALSE, include=FALSE}
+#Initial Conditions
+ny_betas_rep <- rep(ny_betas, 21)
+# beta_estimate_rep <- rep(ny_beta_estimate, 21)
+i.now <-newyork$cases[1]/.37  #I_rec[1] #cases at biweek 1 times the average US reporting rate (1/.37) 
+s.now <- 220404 #initial susceptibles using paper method 
+r.now <- newyork$pop[1] - i.now - s.now
+
+#Simulate using paper betas
+Sim <- function(beta, pop, i.now, s.now, r.now, births) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now), nrow=1))
+names(results) <- c("I", "S", "R")
+  for(i in 1:546){
+    if(s.now*i.now >0){
+    n.now <- pop[i]
+    i.next <- beta[i]*(i.now^.975)*s.now/n.now
+    #i.next <- rnbinom(n=1, mu=beta[i]*(i.now^.975)*s.now/n.now, size=i.now) 
+    b.now <- births[i]
+    s.now <- s.now - i.next + b.now
+    r.now <- r.now + i.now
+    i.now <- i.next
+    results <- rbind(results, c(i.now, s.now, r.now))
+    }
+    else {break}
+  }
+return(results)
+}
+  
+simdata <- Sim(beta=ny_betas_rep, pop=newyork$pop, i.now=i.now, s.now=s.now, r.now=r.now, births=newyork$rec)
+
+#Pull out Simulation Data and Create Time Vector 
+I <- simdata$I
+S_sim <- simdata$S
+T<- seq(1, length(I), 1) #number of biweeks
+
+#Plot Simulation
+ggplot(simdata, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  #geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Simulated NY Measles Dynamics using Seasonally Changing Betas from Paper")
+
+#Plot Infecteds
+# ggplot(simdata, aes(x=T)) +
+#   geom_line(aes(y=I))
+
+ggplot(newyork, aes(x=number)) +
+  geom_line(aes(y=cases, col="cases")) +
+  geom_line(aes(y=I_rec, col="I_rec"))+
+  # geom_line(aes(y=I[1:546], col="I")) +
+  labs(x="Biweek", y="Number of Infecteds or Cases", title="Simulated Infected Dynamics vs Case Report Data")
+```
+```{r Backwards Attempt, eval=FALSE, include=FALSE}
+# #Going Backwards to Obtain Susceptible Dynamics and Infected dynamics
+# data_backwards <- list(N=length(Z), P=as.integer(newyork$pop), C=as.integer(newyork$cases*2.7), Z=as.integer(Z), beta=ny_betas_rep)
+# 
+# Stan_backwards <- as.character("
+# data {
+# 	int<lower=1> N; // time steps
+#   int P[N]; //population size
+# 	int <lower=0> C[N]; // cases
+# 	int  Z[N]; // Zt 
+#   real beta[N];
+# }
+# 
+# parameters {
+#   real <lower=P[1]*.001, upper= P[N]> Sbar;
+# }
+# 
+# 
+# model {
+# 	//priors
+#   Sbar ~ normal(P[1]/10, P[1]/10);
+# 
+# 	//likelihood
+# 	for (n in 2:N){
+# 		C[n] ~ neg_binomial_2(beta[n-1]*(C[n-1]^.975)*(Z[n-1]+Sbar)/P[n-1], C[n-1]);
+# 	}
+# }    ") 
+# 
+# bayes_backwards <- stan(model_code = Stan_backwards, data=data_backwards, iter=500000, chains=4)
+```
+
+```{r Piecewise Method, eval=FALSE, include=FALSE}
+#Figuring Out Localized Linear Regression
+
+#R bloggers method (from crawly book) Piecewise Regression
+
+breaks <- cumcases[which(cumcases>=0 & cumcases <=2.0e05)]
+
+mse <- numeric(length(breaks))
+for(i in 1:length(breaks)){
+  piecewise1 <- lm(cumbirths ~ cumcases*(cumcases<breaks[i])+cumcases*(cumcases>=breaks[i]))
+  mse[i] <- summary(piecewise1)[6]
+}
+mse <- as.numeric(mse) #use MSE to find break point with lowest residual error 
+
+ggplot(,aes(x=breaks)) +
+  geom_line(aes(y=mse))
+
+c1 <- breaks[which(mse==min(mse))] #find first break by finding minimum of mse 
+
+breaks2 <- cumcases[which(cumcases>2.5e5)]
+mse <- numeric(length(breaks2))
+for(i in 1:length(breaks2)){
+  piecewise1 <- lm(cumbirths ~ cumcases*(cumcases<breaks2[i])+cumcases*(cumcases>=breaks2[i]))
+  mse[i] <- summary(piecewise1)[6]
+}
+mse <- as.numeric(mse) #use MSE to find break point with lowest residual error 
+
+ggplot(,aes(x=breaks2)) +
+  geom_line(aes(y=mse))
+
+c2 <- breaks2[which(mse==min(mse))] #find first break by finding minimum of mse 
+
+piecewise2 <- lm(cumbirths~cumcases*(cumcases <= c1) + cumcases*(cumcases > c1 & cumcases <=c2) + cumcases*(cumcases > c2))
+
+plot(cumcases,cumbirths, type="l")
+curve((-1.517e05 + 1.166e05) + (4.3372)*x, add=TRUE, from=0, to=c1)
+curve((-1.517e05 + 1.412e+05) + 4.599*x, add=TRUE, from=c1, to=c2)
+curve((-1.517e05) + 4.742*x, add=TRUE, from=c2, to=max(cumcases))
+abline(v=15, lty=3)
+
+Z_piecewise <- as.numeric(residuals(piecewise2))
+
+ggplot(newyork, aes(x=number))+
+  geom_line(aes(y=Z_piecewise, col="Z_piecewise")) +
+  geom_line(aes(y=Z_linear, col="Z_linear")) # looks pretty good except for at break points
+  
+```
+```{r Graveyard, eval=FALSE, include=FALSE}
+#GRAVEYARD#
+
+#Obtain fitted values using equation from book: page 66 definition of a linear smoother (NOPE DID NOT WORK)
+# x.wt.y <- matrix(nrow=length(cumcases), ncol=m)
+# for(i in 1:length(cumcases)){
+#   x.wt.y[i,] <- x.wt[i,]*y.n[i,]
+# }
+# 
+# y.fit <- apply(x.wt.y, 1, sum)
+# 
+# 
+# Z_local2 <- y.fit - cumbirths
+
+
+
+# start <- Sys.time()
+# y.fit <- 0
+# for(i in 1:length(cumcases)){
+#   for(k in 1:m){
+#   y.fit[i] <- sum(x.wt[i,k]*y.n[i,k])
+#   }
+# }
+# Sys.time() - start
+
+# #Locally Weighted Least Squares Using Ppt method
+# 
+# #Step 1: define window width "m" such that for each focal x, we select the m nearest neighbors in terms of x value. Window Width is somewhat arbitrary - I'm going to try 10% of the data (so m=547*.1=55)
+# 
+# ord <- order(cumcases)
+# c.cases <- cumcases[ord] #order cumbirths from least to greatest
+# c.births <- c.births[ord] #order cumcases from least to greatest SAME AS CUMCASES AND CUMBIRTHS
+# 
+# m <- floor(length(cumcases)*(.5)) #window width
+# h <- m/2
+# 
+# 
+# x0 <- c.cases[100] #set focal x 
+# diffs <- abs(c.cases - x0) #difference between each datapoint and x0 (x value difference)
+# which.diff <- sort(diffs)[m] #This returns the mth smallest difference between c.births and x0. 
+# 
+# x.n <- c.cases[diffs <= which.diff] #select 55 closest x values to focal x
+# y.n <- c.births[diffs <= which.diff] #select 55 closest corresponding y valeus 
+#   
+# 
+# #Create Weighting Function using Tricube Weights Method
+# tricube <- function(z) {
+#   ifelse(abs(z)<1, (1-(abs(z))^3)^3, 0)
+# }
+# 
+# #Obtain Weighted Means for our focal x (currently the 100th datapoint)
+# x.wt <- 0
+# for(i in 1:length(x.n)){
+# x.wt[i]<- tricube(z=(x.n[i] - x0)/which.diff)
+# }
+# 
+# x.reg <- lm(y.n~x.n, weights = x.wt)
+# 
+# x.coeffs <- as.numeric(coef(x.reg)[2])
+```
+

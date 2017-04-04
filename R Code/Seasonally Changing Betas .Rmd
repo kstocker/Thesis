@@ -1,0 +1,598 @@
+---
+title: "Seasonally Changing Betas"
+author: "Kaitlyn Stocker"
+date: "2/7/2017"
+output: html_document
+---
+
+```{r, include=FALSE}
+library(rstan)
+library(ggplot2)
+```
+
+#Initial Conditions 
+```{r, include=FALSE}
+#Initial Conditions
+n.now <- 763000
+s.now <- round((1/17)*n.now)
+i.now <- round((.02/26)*n.now)
+r.now <- n.now-s.now-i.now
+beta_4 <- rep(c(rep(1.68,7), rep(1.65,7), rep(1.61,7), rep(1.70,7)),10)
+#birthrate <- rgamma(1, shape=2, scale=.000215)
+b.now <- 0
+
+#Stan Code
+Stan_reconstructed_4betas <- as.character("
+data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+  real time_added[N];
+	int <lower=0> I[N]; // infecteds 
+	int  Z[N]; // Zt 
+}
+
+parameters {
+  real <lower=P[1]/100, upper= P[N]> Sbar;
+	real<lower=0, upper=5> beta[4];
+}
+
+model {
+	//priors
+  Sbar ~ normal(P[1]/2, P[1]/10);
+	beta[4] ~ gamma(3, 1);
+
+	//likelihood
+	for (n in 2:7){
+		I[n] ~ neg_binomial_2(beta[1]*I[n-1]*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+	}
+for (n in 8:14){
+		I[n] ~ neg_binomial_2(beta[2]*I[n-1]*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+}
+for (n in 15:21){
+		I[n] ~ neg_binomial_2(beta[3]*I[n-1]*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+}
+for (n in 22:28){
+		I[n] ~ neg_binomial_2(beta[4]*I[n-1]*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+}
+for (n in 29:35){
+		I[n] ~ neg_binomial_2(beta[1]*I[n-1]*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+}
+for (n in 36:42){
+		I[n] ~ neg_binomial_2(beta[2]*I[n-1]*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+}
+for (n in 43:N){
+		I[n] ~ neg_binomial_2(beta[3]*I[n-1]*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+	}
+}    ")
+
+
+
+Stan_sim_4betas <- as.character("
+                            data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+  real time_added[N];
+	int <lower=0> I[N];
+	int <lower=0> S[N];
+}
+
+
+parameters {
+	real<lower=0, upper=5> beta[4];
+}
+
+model {
+	//priors
+	beta[4] ~ gamma(3, 1);
+	//likelihood
+	for (n in 2:7){
+		I[n] ~ neg_binomial_2(beta[1]*I[n-1]*S[n-1]/P[n-1], I[n-1]);
+	}
+for (n in 8:14){
+		I[n] ~ neg_binomial_2(beta[2]*I[n-1]*S[n-1]/P[n-1], I[n-1]);
+}
+for (n in 15:21){
+		I[n] ~ neg_binomial_2(beta[3]*I[n-1]*S[n-1]/P[n-1], I[n-1]);
+}
+for (n in 22:28){
+		I[n] ~ neg_binomial_2(beta[4]*I[n-1]*S[n-1]/P[n-1], I[n-1]);
+}
+for (n in 29:35){
+		I[n] ~ neg_binomial_2(beta[1]*I[n-1]*S[n-1]/P[n-1], I[n-1]);
+}
+for (n in 36:42){
+		I[n] ~ neg_binomial_2(beta[2]*I[n-1]*S[n-1]/P[n-1], I[n-1]);
+}
+for (n in 43:N){
+		I[n] ~ neg_binomial_2(beta[3]*I[n-1]*S[n-1]/P[n-1], I[n-1]);
+	}
+}     ")
+
+
+
+Stan_sim_28betas <- as.character("
+                            data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+	int <lower=0> I[N];
+	int <lower=0> S[N];
+}
+
+
+parameters {
+	real<lower=0, upper=5> beta[28];
+}
+
+transformed parameters {
+  real<lower=0, upper=5> betaseq[28*3];
+  for(n in 1:28){
+betaseq[n] = beta[n];
+betaseq[n+28] = beta[n];
+betaseq[n+56] = beta[n];
+  }
+}
+
+model {
+	//priors
+	beta[28] ~ gamma(1.5, 1);
+
+	//likelihood
+	for (n in 2:N){
+		I[n] ~ neg_binomial_2(betaseq[n-1]*I[n-1]*S[n-1]/P[n-1], I[n-1]);
+	}
+}     ")
+
+Stan_reconstructed_28betas <- as.character("
+data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+	int <lower=0> I[N]; // infecteds 
+	int  Z[N]; // Zt 
+}
+
+parameters {
+  real <lower=P[1]/100, upper= P[N]> Sbar;
+	real<lower=0, upper=5> beta[28];
+}
+
+transformed parameters {
+  real<lower=0, upper=5> betaseq[28*3];
+  for(n in 1:28){
+betaseq[n] = beta[n];
+betaseq[n+28] = beta[n];
+betaseq[n+56] = beta[n];
+  }
+}
+
+model {
+	//priors
+  Sbar ~ normal(P[1]/2, P[1]/10);
+	beta[28] ~ gamma(1.5, 1);
+
+	//likelihood
+	for (n in 2:N){
+		I[n] ~ neg_binomial_2(betaseq[n-1]*I[n-1]*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+	}
+}    ")
+
+
+```
+
+Seasonally Changing Betas: 4 Betas
+```{r, echo=FALSE}
+Sim <- function(beta, n.now, i.now, s.now, r.now, b.now) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now, b.now, n.now), nrow=1))
+names(results) <- c("I", "S", "R", "B", "N")
+  for(i in 1:280){
+    if(s.now*i.now >0){
+    i.next <- rnbinom(n=1, mu=beta[i]*i.now*s.now/n.now, size=i.now) 
+    s.now <- s.now - i.next + b.now
+    r.now <- r.now + i.now
+    b.now <- rgamma(1, shape=2, scale=.000215)*n.now
+    n.now <- n.now + b.now 
+    i.now <- i.next
+    results <- rbind(results, c(i.now, s.now, r.now, b.now, n.now))
+    }
+    else {break}
+  }
+return(results)
+}
+  
+simdata <- Sim(beta=beta_4, n.now=n.now, i.now=i.now, s.now=s.now, r.now=r.now, b.now=b.now)
+
+#Pull out Simulation Data and Create Time Vector 
+I <- simdata$I
+B <- simdata$B
+S_sim <- simdata$S
+n <- simdata$N
+T<- cumsum(rexp(length(I), rate=(1/2.2)))
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+#Plot Simulation
+ggplot(simdata, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Simulated Dynamics, Seasonally Changing Betas")
+
+#Reconstructing Z dynamics 
+cumbirths <- cumsum(B)
+cuminfecteds <- cumsum(I)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cuminfecteds), nrow=length(cuminfecteds)))
+names(cumulativeinfo) <- c("cumbirths", "cuminfecteds")
+
+regression <- lm(cumbirths ~ 1, offset=(cuminfecteds))
+
+Z <- as.vector(resid(regression))
+```
+```{r, include=FALSE}
+#Run Bayes
+data_reconstructed <- list(N=length(I), P=as.integer(n), I=as.integer(I), Z=as.integer(Z), time_added=time_added)
+
+bayes_reconstructed <- stan(model_code = Stan_reconstructed_4betas, data=data_reconstructed, iter=500000, chains=4)
+
+#Run Bayes for Simulation
+data_sim <- list(N=length(I), P=as.integer(n), I=as.integer(I), S=as.integer(S_sim), time_added=time_added)
+
+bayes_sim <- stan(model_code = Stan_sim_4betas, data=data_sim, iter=500000, chains=4)
+```
+```{r, echo=FALSE}
+#Plot S_reconstructed
+Sbar <- extract(bayes_reconstructed, 'Sbar')
+Sbar <- unlist(Sbar, use.names=FALSE)
+lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+
+S_lower <- lowlim_Sbar + Z
+S_upper <- uplim_Sbar + Z
+
+ggplot(simdata, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_lower, col="S_lower"))+
+  geom_line(aes(y=S_upper, col="S_upper"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Dynamics")
+```
+```{r, echo=FALSE}
+#Checking if 95% Credible Intervals Contain True Betas for the Simulated Results 
+bayes_sim_extracted <- extract(bayes_sim, permuted=TRUE)
+betas<-bayes_sim_extracted$beta
+
+beta<- matrix(nrow=1000000, ncol=28)
+for(i in 1:4){
+  beta[,i] <- betas[,i]
+}
+
+lowlimbeta_sim <- c()
+uplimbeta_sim <- c()
+containbeta_sim <- c()
+beta_4_vals <- c(1.68, 1.65, 1.61, 1.70)
+for(i in 1:4){lowlimbeta_sim[i] <- quantile(beta[,i], probs=.025, names=FALSE)
+              uplimbeta_sim[i] <- quantile(beta[,i], probs=.975, names =FALSE)
+              containbeta_sim[i]<- ifelse(lowlimbeta_sim[i] <= beta_4_vals[i] & uplimbeta_sim[i] >= beta_4_vals[i], 1, 0)
+}
+
+
+#Checking if 95% Credible Intervals Contain True Betas for the Reconstructed Results 
+bayes_sr_extracted <- extract(bayes_reconstructed, permuted=TRUE)
+beta_<-bayes_sr_extracted$beta
+sbar <- extract(bayes_reconstructed, 'Sbar', permuted=TRUE)
+sbar <- unlist(sbar, use.names=FALSE)
+
+beta<- matrix(nrow=1000000, ncol=28)
+for(i in 1:4){
+  beta[,i] <- beta_[,i]
+}
+
+lowlimbeta_sr <- c()
+uplimbeta_sr <- c()
+containbeta_sr <- c()
+for(i in 1:4){lowlimbeta_sr[i] <- quantile(beta[,i], probs=.025, names=FALSE)
+              uplimbeta_sr[i] <- quantile(beta[,i], probs=.975, names =FALSE)
+              containbeta_sr[i]<- ifelse(lowlimbeta_sr[i]<=beta_4_vals[i] & uplimbeta_sr[i]>=beta_4_vals[i],1,0)
+}
+
+
+lowlimsbar <- quantile(sbar, probs=.025, names=FALSE)
+uplimsbar <- quantile(sbar, probs=.975, names =FALSE)
+containssbar<- ifelse(lowlimsbar <= mean(S_sim) & uplimsbar >= mean(S_sim), 1, 0)
+
+```
+```{r}
+bayes_sim
+bayes_reconstructed
+
+containbeta_sim
+containbeta_sr
+containssbar
+```
+
+
+Seasonally Changing Betas: 28 Betas 
+```{r, echo=FALSE}
+t<-seq(0,28,1)
+beta_28 <- 0
+for(i in 1:28){
+  beta_28[i] <- 1.31*(1+.1*cos((pi/28)*t[i]))
+}
+  
+beta_28 <- rep(beta_28, 20)
+
+Sim <- function(beta, n.now, i.now, s.now, r.now, b.now) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now, b.now, n.now), nrow=1))
+names(results) <- c("I", "S", "R", "B", "N")
+  for(i in 1:280){
+    if(s.now*i.now >0){
+    i.next <- rnbinom(n=1, mu=beta[i]*i.now*s.now/n.now, size=i.now) 
+    s.now <- s.now - i.next + b.now
+    r.now <- r.now + i.now
+    b.now <- rgamma(1, shape=2, scale=.0001)*n.now #birth rate = .02 annually, scaled to t=13days 
+    n.now <- n.now + b.now 
+    i.now <- i.next
+    results <- rbind(results, c(i.now, s.now, r.now, b.now, n.now))
+    }
+    else {break}
+  }
+return(results)
+}
+  
+simdata <- Sim(beta=beta_28, n.now=n.now, i.now=i.now, s.now=s.now, r.now=r.now, b.now=b.now)
+
+#Pull out Simulation Data and Create Time Vector 
+I <- simdata$I
+B <- simdata$B
+S_sim <- simdata$S
+n <- simdata$N
+T<- cumsum(rexp(length(I), rate=(1/13))) #infectious period=13 days
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+#Plot Simulation
+ggplot(simdata, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Simulated Dynamics, Seasonally Changing Betas")
+
+#Reconstructing Z dynamics 
+cumbirths <- cumsum(B)
+cuminfecteds <- cumsum(I)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cuminfecteds), nrow=length(cuminfecteds)))
+names(cumulativeinfo) <- c("cumbirths", "cuminfecteds")
+
+regression <- lm(cumbirths ~ 1, offset=(cuminfecteds))
+
+Z <- as.vector(resid(regression))
+```
+```{r, include=FALSE}
+#Run Bayes
+data_reconstructed <- list(N=length(I), P=as.integer(n), I=as.integer(I), Z=as.integer(Z))
+
+bayes_reconstructed <- stan(model_code = Stan_reconstructed_28betas, data=data_reconstructed, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
+
+#Run Bayes for Simulation
+data_sim <- list(N=length(I), P=as.integer(n), I=as.integer(I), S=as.integer(S_sim))
+
+bayes_sim <- stan(model_code = Stan_sim_28betas, data=data_sim, iter=500000, chains=4, pars=c("beta"), include=TRUE)
+```
+```{r, echo=FALSE}
+#Plot S_reconstructed
+Sbar <- extract(bayes_reconstructed, 'Sbar')
+Sbar <- unlist(Sbar, use.names=FALSE)
+lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+
+S_lower <- lowlim_Sbar + Z
+S_upper <- uplim_Sbar + Z
+
+ggplot(simdata, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_lower, col="S_lower"))+
+  geom_line(aes(y=S_upper, col="S_upper"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Dynamics")
+```
+```{r, echo=FALSE}
+#Checking if 95% Credible Intervals Contain True Betas for the Simulated Results 
+bayes_sim_extracted <- extract(bayes_sim, permuted=TRUE)
+beta_<-bayes_sim_extracted$beta
+
+beta<- matrix(nrow=1000000, ncol=28)
+for(i in 1:28){
+  beta[,i] <- beta_[,i]
+}
+
+lowlimbeta_sim <- c()
+uplimbeta_sim <- c()
+containbeta_sim <- c()
+
+for(i in 1:28){lowlimbeta_sim[i] <- quantile(beta[,i], probs=.025, names=FALSE)
+              uplimbeta_sim[i] <- quantile(beta[,i], probs=.975, names =FALSE)
+              containbeta_sim[i]<- ifelse(lowlimbeta_sim[i] <= beta_28[i] & uplimbeta_sim[i] >= beta_28[i], 1, 0)
+}
+
+
+#Checking if 95% Credible Intervals Contain True Betas for the Reconstructed Results 
+bayes_sr_extracted <- extract(bayes_reconstructed, permuted=TRUE)
+beta_<-bayes_sr_extracted$beta
+sbar <- extract(bayes_reconstructed, 'Sbar', permuted=TRUE)
+sbar <- unlist(sbar, use.names=FALSE)
+
+beta<- matrix(nrow=1000000, ncol=28)
+for(i in 1:28){
+  beta[,i] <- beta_[,i]
+}
+
+lowlimbeta_sr <- c()
+uplimbeta_sr <- c()
+containbeta_sr <- c()
+for(i in 1:28){lowlimbeta_sr[i] <- quantile(beta[,i], probs=.025, names=FALSE)
+              uplimbeta_sr[i] <- quantile(beta[,i], probs=.975, names =FALSE)
+              containbeta_sr[i]<- ifelse(lowlimbeta_sr[i]<=beta_28[i] & uplimbeta_sr[i]>=beta_28[i],1,0)
+}
+
+
+lowlimsbar <- quantile(sbar, probs=.025, names=FALSE)
+uplimsbar <- quantile(sbar, probs=.975, names =FALSE)
+containssbar<- ifelse(lowlimsbar <= mean(S_sim) & uplimsbar >= mean(S_sim), 1, 0)
+
+```
+```{r}
+bayes_sim
+bayes_reconstructed
+
+containbeta_sim
+containbeta_sr
+containssbar
+```
+
+
+Oscillatory Dynamics: Measles 
+```{r, echo=FALSE}
+t<-seq(0,26,1)
+beta_26 <- 0
+for(i in 1:26){
+  beta_26[i] <- 1.31*(1+.1*cos((pi/26)*t[i]))
+}
+  
+beta_26 <- rep(beta_26, 20)
+
+Sim <- function(beta, n.now, i.now, s.now, r.now, b.now) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now, b.now, n.now), nrow=1))
+names(results) <- c("I", "S", "R", "B", "N")
+  for(i in 1:520){
+    if(s.now*i.now >0){
+    i.next <- rnbinom(n=1, mu=beta[i]*i.now*s.now/n.now, size=i.now) 
+    b.now <- rexp(1, rate=.02/26)*n.now #birth rate = .02 annually, scaled to t=2 weeks
+    s.now <- s.now - i.next + b.now
+    r.now <- r.now + i.now
+    n.now <- n.now + b.now 
+    i.now <- i.next
+    results <- rbind(results, c(i.now, s.now, r.now, b.now, n.now))
+    }
+    else {break}
+  }
+return(results)
+}
+  
+simdata <- Sim(beta=beta_26, n.now=n.now, i.now=i.now, s.now=s.now, r.now=r.now, b.now=b.now)
+
+#Pull out Simulation Data and Create Time Vector 
+I <- simdata$I
+B <- simdata$B
+S_sim <- simdata$S
+n <- simdata$N
+T<- cumsum(rexp(length(I), rate=(1/13))) #infectious period=13 days
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+#Plot Simulation
+ggplot(simdata, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Simulated Dynamics, Seasonally Changing Betas")
+
+#Reconstructing Z dynamics 
+cumbirths <- cumsum(B)
+cuminfecteds <- cumsum(I)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cuminfecteds), nrow=length(cuminfecteds)))
+names(cumulativeinfo) <- c("cumbirths", "cuminfecteds")
+
+regression <- lm(cumbirths ~ 1, offset=(cuminfecteds))
+
+Z <- as.vector(resid(regression))
+```
+```{r, include=FALSE}
+#Run Bayes
+data_reconstructed <- list(N=length(I), P=as.integer(n), I=as.integer(I), Z=as.integer(Z))
+
+bayes_reconstructed <- stan(model_code = Stan_reconstructed_28betas, data=data_reconstructed, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
+
+#Run Bayes for Simulation
+data_sim <- list(N=length(I), P=as.integer(n), I=as.integer(I), S=as.integer(S_sim))
+
+bayes_sim <- stan(model_code = Stan_sim_28betas, data=data_sim, iter=500000, chains=4, pars=c("beta"), include=TRUE)
+```
+```{r, echo=FALSE}
+#Plot S_reconstructed
+Sbar <- extract(bayes_reconstructed, 'Sbar')
+Sbar <- unlist(Sbar, use.names=FALSE)
+lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+
+S_lower <- lowlim_Sbar + Z
+S_upper <- uplim_Sbar + Z
+
+ggplot(simdata, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_lower, col="S_lower"))+
+  geom_line(aes(y=S_upper, col="S_upper"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Dynamics")
+```
+```{r, echo=FALSE}
+#Checking if 95% Credible Intervals Contain True Betas for the Simulated Results 
+bayes_sim_extracted <- extract(bayes_sim, permuted=TRUE)
+beta_<-bayes_sim_extracted$beta
+
+beta<- matrix(nrow=1000000, ncol=28)
+for(i in 1:28){
+  beta[,i] <- beta_[,i]
+}
+
+lowlimbeta_sim <- c()
+uplimbeta_sim <- c()
+containbeta_sim <- c()
+
+for(i in 1:28){lowlimbeta_sim[i] <- quantile(beta[,i], probs=.025, names=FALSE)
+              uplimbeta_sim[i] <- quantile(beta[,i], probs=.975, names =FALSE)
+              containbeta_sim[i]<- ifelse(lowlimbeta_sim[i] <= beta_28[i] & uplimbeta_sim[i] >= beta_28[i], 1, 0)
+}
+
+
+#Checking if 95% Credible Intervals Contain True Betas for the Reconstructed Results 
+bayes_sr_extracted <- extract(bayes_reconstructed, permuted=TRUE)
+beta_<-bayes_sr_extracted$beta
+sbar <- extract(bayes_reconstructed, 'Sbar', permuted=TRUE)
+sbar <- unlist(sbar, use.names=FALSE)
+
+beta<- matrix(nrow=1000000, ncol=28)
+for(i in 1:28){
+  beta[,i] <- beta_[,i]
+}
+
+lowlimbeta_sr <- c()
+uplimbeta_sr <- c()
+containbeta_sr <- c()
+for(i in 1:28){lowlimbeta_sr[i] <- quantile(beta[,i], probs=.025, names=FALSE)
+              uplimbeta_sr[i] <- quantile(beta[,i], probs=.975, names =FALSE)
+              containbeta_sr[i]<- ifelse(lowlimbeta_sr[i]<=beta_28[i] & uplimbeta_sr[i]>=beta_28[i],1,0)
+}
+
+
+lowlimsbar <- quantile(sbar, probs=.025, names=FALSE)
+uplimsbar <- quantile(sbar, probs=.975, names =FALSE)
+containssbar<- ifelse(lowlimsbar <= mean(S_sim) & uplimsbar >= mean(S_sim), 1, 0)
+
+```
+```{r}
+bayes_sim
+bayes_reconstructed
+
+containbeta_sim
+containbeta_sr
+containssbar
+```
+
+
+
+
+

@@ -1,0 +1,129 @@
+
+```{r}
+SIRsimdt <- function(I.init, S.init, beta, time.steps){
+
+  I <- I.init
+  S <- S.init
+
+  for(i in 2:time.steps){
+    pp<-(1 - exp(-beta*I[i-1]))
+    I[i]<- rbinom(1, size=S[i-1], prob=pp)
+    S[i]<- S[i-1] - I[i]
+  }
+  return(I)
+}
+
+SIRsimdt(I.init=(3/763), S.init=(760/763), beta=1.66, time.steps=10)
+```
+
+```{r}
+#Adding Stochasticity
+
+SIR_nd_stoch <- function(beta, I0, S0, n) {
+  S <- St <- rep(S0, n)
+  I <- It <- rep(I0, n)
+  q <- exp(-beta)
+
+  time <- 0
+  while (sum(It)>0) {
+    It <- rbinom(n, St, 1-(q^It))
+    St <- St-It
+    I <- rbind(I, It)
+    S <- rbind(S, St)
+    time <- time+.1
+  }
+  I <- as.matrix(I)
+  S <- as.matrix(S)
+  list(I0=I0,S0=S0,beta=beta,n=n,I=I,S=S)
+}
+
+influenza.result <- SIR_nd_stoch(beta=1.66, I0=3, S0=760, n=2)
+influenza.result
+
+plotinfected <- function(results) {
+  plot(x=0:(nrow(results$I)-1), y=results$I[,1], ylim=c(0, max(results$I)), type="l", xla="time", ylab="number infected", main="", cex.axis=1.5, cex.lab=1.7, cex.main=1.8)
+  if (ncol(results$I)>1) {
+    for (i in 2:ncol(results$I)) {
+      lines(x=0:(nrow(results$I)-1), y=results$I[,i], col=i)
+    }
+  }
+}
+
+plotinfected(influenza.result)
+
+
+```
+
+```{r}
+SIR_nd_stoch2 <- function(beta, I0, S0, time.steps) {
+  S <- S[i] <- rep(S0, time.steps)
+  I <- I[i] <- rep(I0, time.steps)
+  q <- exp(-beta)
+ 
+  for (i in 2:time.steps) {
+    I[i] <- rbinom(1, S[i-1], 1-(q^I[i-1]))
+    S[i] <- S[i-1]-I[i]
+    I <- rbind(I, I[i])
+    S <- rbind(S, S[i])
+  }
+  I <- c(I)
+  S <- c(S)
+  list(I0=I0,S0=S0,beta=beta,time.steps=time.steps,I=I,S=S)
+}
+
+influenza.result <- SIR_nd_stoch2(beta=1.66, I0=3, S0=760, time.steps=10)
+influenza.result
+```
+
+
+```{r}
+
+# reedfrost - the Reed-Frost epidemic model
+#  p  = probability of transmission
+#  I0 = initial number of infecteds
+#  S0 = initial number of susceptibles
+#  n  = number of trials
+#  greenwood = set to TRUE for the Greenwood model, otherwise run Reed-Frost
+# outputs the number of infected and susceptibles over time (as I and S)
+reedfrost <- function(p, I0, S0, n, greenwood=FALSE) {
+  S <- St <- rep(S0, n)
+  I <- It <- rep(I0, n)
+  q <- 1-p
+
+  time <- 0
+  while (sum(It)>0) {
+    if (greenwood)
+      It <- rbinom(n, St, ifelse(It>0, p, 0))
+    else
+      It <- rbinom(n, St, 1-(q^It))
+    St <- St-It
+    I <- rbind(I, It)
+    S <- rbind(S, St)
+    time <- time+1
+  }
+  I <- as.matrix(I)
+  S <- as.matrix(S)
+  list(I0=I0,S0=S0,p=p,n=n,I=I,S=S)
+}
+
+#plot histogram of epidemic sizes
+plotepidemicsizes <- function(results, title="Sizes of epidemics") {
+  pop = results$I0+results$S0
+  hist(pop-results$S[nrow(results$S),], breaks=0:pop, main=title, xlab="number of cases", ylab="number of trials", cex.lab=1.5, cex.axis=1.5)
+}
+
+#plot number of infected people over time for all n trials
+plotinfected <- function(results) {
+  plot(x=0:(nrow(results$I)-1), y=results$I[,1], ylim=c(0, max(results$I)), type="l", xla="time", ylab="number infected", main="", cex.axis=1.5, cex.lab=1.7, cex.main=1.8)
+  if (ncol(results$I)>1) {
+    for (i in 2:ncol(results$I)) {
+      lines(x=0:(nrow(results$I)-1), y=results$I[,i], col=i)
+    }
+  }
+}
+
+# run the Reed-Frost model
+rf.result <- reedfrost(p=0.1, I0=1, S0=49, n=2)
+rf.result
+```
+

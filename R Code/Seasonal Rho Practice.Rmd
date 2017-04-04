@@ -1,0 +1,1011 @@
+---
+title: "Local Linear Regression"
+author: "Kaitlyn Stocker"
+date: "3/13/2017"
+output: html_document
+---
+```{r Libraries, include=FALSE}
+library(dplyr)
+library(rstan)
+library(locfit)
+```
+
+```{r Functions, include=FALSE}
+Sim <- function(beta, pop, i.now, s.now, r.now, births) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now), nrow=1))
+names(results) <- c("I", "S", "R")
+  for(i in 1:545){
+    if(s.now*i.now >0){
+    n.now <- pop[i]
+    i.next <- beta[i]*(i.now^.975)*s.now/n.now
+    #i.next <- rnbinom(n=1, mu=beta[i]*(i.now^.975)*s.now/n.now, size=i.now) 
+    b.now <- births[i]
+    s.now <- s.now - i.next + b.now
+    r.now <- r.now + i.now
+    i.now <- i.next
+    #cases <- i.now/rho[i]
+    results <- rbind(results, c(i.now, s.now, r.now))
+    }
+    else {break}
+  }
+return(results)
+}
+
+tricube <- function(z) {
+  ifelse(abs(z)<1, (1-(abs(z))^3)^3, 0)
+}
+
+gaussian_kernel <- function(x) {
+  (1/sqrt(2*pi))*exp(-x^2/2)
+}
+
+gaussian_sum <- function(i, m) {
+  gaussian_sum <- 0
+  for(k in 1:m){
+      gaussian_sum <- sum(gaussian_kernel((x.n[i,k]-x0[i])/which.diff[i]))
+      return(gaussian_sum)
+    }
+}
+
+gaussian_regression <- function(scale, biweek){
+  ord <- order(cumcases)
+  c.cases <- cumcases[ord] 
+  c.births <- cumbirths[ord] 
+
+  m <- floor(length(cumcases)*(scale)) #SCALE GOES HERE
+  h <- m/2
+
+  x0<-0
+  diffs<-matrix(nrow=length(cumcases), ncol=length(cumcases))
+  which.diff<-0
+  x.n <- matrix(nrow=length(cumcases), ncol=m)
+  y.n <- matrix(nrow=length(cumcases), ncol=m)
+
+  for(i in 1:length(cumcases)){
+  x0[i] <- c.cases[i] #set focal x 
+  diffs[i,] <- abs(c.cases - x0[i]) #difference between each datapoint and x0 (x value difference)
+  which.diff[i] <- sort(diffs[i,])[m] #This returns the mth smallest difference between c.births and x0. 
+
+  x.n[i,] <- c.cases[diffs[i,] <= which.diff[i]] #select m closest x values to focal x
+  y.n[i,] <- c.births[diffs[i,] <= which.diff[i]] #select m closest corresponding y valeus 
+  }
+  
+  tricube <- function(z) {
+  ifelse(abs(z)<1, (1-(abs(z))^3)^3, 0)
+}
+
+gaussian_kernel <- function(x) {
+  (1/sqrt(2*pi))*exp(-x^2/2)
+}
+
+gaussian_sum <- function(i, m) {
+  gaussian_sum <- 0
+  for(k in 1:m){
+      gaussian_sum <- sum(gaussian_kernel((x.n[i,k]-x0[i])/which.diff[i]))
+      return(gaussian_sum)
+    }
+}
+  
+  x.wt.gaus <- matrix(nrow=length(cumcases), ncol=m)
+  x.coeffs.gaus <- 0
+  for(i in 1:length(cumcases)){
+    for(k in 1:m){
+  x.wt.gaus[i,k]<- gaussian_kernel(x=(x.n[i,k] - x0[i])/which.diff[i])/gaussian_sum(i,m)
+  }
+  }
+  
+  reg.gaus <- lapply(1:length(cumcases), function(x) lm(y.n[x,]~x.n[x,], weights = x.wt.gaus[x,]))
+
+  x.coeffs.gaus <-0
+  x.intercept.gaus <-0
+  y.fit.gaus <- 0
+  for(i in 1:length(reg.gaus)){
+    x.coeffs.gaus[i] <- as.numeric(coef(reg.gaus[[i]])[2])
+    x.intercept.gaus[i] <- as.numeric(coef(reg.gaus[[i]])[1])
+    y.fit.gaus[i] <- x.coeffs.gaus[i]*c.cases[i]+x.intercept.gaus[i]
+  }
+  
+x.coeffs.gaus.smooth <- fitted(loess(x.coeffs.gaus ~ biweek))
+y.fit.gaus.smooth <-0
+for(i in 1:length(x.coeffs.gaus.smooth)){
+  y.fit.gaus.smooth[i] <- x.coeffs.gaus.smooth[i]*c.cases[i] + x.intercept.gaus[i]
+}
+
+return(list(y.fit.gaus=y.fit.gaus, y.fit.gaus.smooth=y.fit.gaus.smooth, x.coeffs.gaus=x.coeffs.gaus, x.coeffs.gaus.smooth=x.coeffs.gaus.smooth))
+}
+
+tricube_regression <- function(scale){
+  ord <- order(cumcases)
+  c.cases <- cumcases[ord] 
+  c.births <- cumbirths[ord] 
+
+  m <- floor(length(cumcases)*(scale)) #SCALE GOES HERE
+  h <- m/2
+
+  x0<-0
+  diffs<-matrix(nrow=length(cumcases), ncol=length(cumcases))
+  which.diff<-0
+  x.n <- matrix(nrow=length(cumcases), ncol=m)
+  y.n <- matrix(nrow=length(cumcases), ncol=m)
+
+  for(i in 1:length(cumcases)){
+  x0[i] <- c.cases[i] #set focal x 
+  diffs[i,] <- abs(c.cases - x0[i]) #difference between each datapoint and x0 (x value difference)
+  which.diff[i] <- sort(diffs[i,])[m] #This returns the mth smallest difference between c.births and x0. 
+
+  x.n[i,] <- c.cases[diffs[i,] <= which.diff[i]] #select m closest x values to focal x
+  y.n[i,] <- c.births[diffs[i,] <= which.diff[i]] #select m closest corresponding y valeus 
+  }
+  
+  tricube <- function(z) {
+  ifelse(abs(z)<1, (1-(abs(z))^3)^3, 0)
+}
+
+  x.wt.tri <- matrix(nrow=length(cumcases), ncol=m)
+x.coeffs.tri <- 0
+y.fit.tri <- 0
+for(i in 1:length(cumcases)){
+  for(k in 1:m){
+x.wt.tri[i,k]<- tricube(z=(x.n[i,k] - x0[i])/which.diff[i]) #weights 
+}
+}
+
+
+reg.tri <- lapply(1:length(cumcases), function(x) lm(y.n[x,]~x.n[x,], weights = x.wt.tri[x,])) #run regression for each x
+
+x.coeffs.tri <-0
+x.intercept.tri<-0
+y.fit.tri <- 0
+for(i in 1:length(reg.tri)){
+  x.coeffs.tri[i] <- as.numeric(coef(reg.tri[[i]])[2])
+  x.intercept.tri[i] <- as.numeric(coef(reg.tri[[i]])[1])
+  y.fit.tri[i] <- x.coeffs.tri[i]*c.cases[i]+x.intercept.tri[i]
+}
+  
+x.coeffs.tri.smooth <- fitted(loess(x.coeffs.tri ~ T))
+y.fit.tri.smooth <-0
+for(i in 1:length(x.coeffs.tri.smooth)){
+  y.fit.tri.smooth[i] <- x.coeffs.tri.smooth[i]*c.cases[i] + x.intercept.tri[i]
+}
+
+return(list(y.fit.tri=y.fit.tri, y.fit.tri.smooth=y.fit.tri.smooth, x.coeffs.tri=x.coeffs.tri, x.coeffs.tri.smooth=x.coeffs.tri.smooth))
+}
+
+y_hat_linear <- function(x,y){
+  as.numeric(fitted(lm(y~x)))
+}
+
+SSE <- function(y_hat, y){
+  SSE<-0
+  for(i in seq_along(y)){
+  SSE <- sum((y[i]- y_hat[i])^2)
+  return(SSE)
+  }
+}
+
+I_error <- function(x){
+  I_error <- abs(simdata$I - x)
+  return(I_error)
+}
+
+S_error <- function(x){
+  S_error <- abs(S_sim - mean(S_sim) - x)
+  return(S_error)
+}
+
+minimize_error <- function(C=C){
+                h <- seq(0.01, 0.9, 0.01)
+  gaus_regression <- lapply(1:length(h), function(x) gaussian_regression(h[x], biweek=T))
+                I <- lapply(1:length(h), function(x) 
+                              C*gaus_regression[[x]]$x.coeffs.gaus.smooth)
+                Z <- lapply(1:length(h), function(x) cumbirths - 
+                              gaus_regression[[x]]$y.fit.gaus)
+  S_errors <- 0
+  for(i in 1:length(Z)){
+    S_errors[i] <- mean(S_error(Z[[i]]))
+  }
+  S_optim <- which.min(S_errors)
+  
+  I_errors<-0
+  for(i in 1:length(I)){
+    I_errors[i] <- mean(I_error(I[[i]]))
+  }
+  I_optim <- which.min(I_errors)
+  
+  return(list(S_scale=h[S_optim], I_scale=h[I_optim]))
+}
+```
+
+
+```{r Import Data, echo=FALSE}
+#Read in Measles Data from Tycho Paper 
+measles <- read.csv(file = "/Users/Kaitlyn/Documents/Thesis Work /Datasets/measlesUKUS.csv", header=TRUE, stringsAsFactors = FALSE)
+
+#Select New York Data 1920-1940, add index, select relevant variables 
+newyork <- measles %>%
+  filter(year>1919 & year <1941) %>%
+  filter(loc == "NEW YORK") %>%
+  select(biweek, year, cases, pop, rec) %>%
+  mutate(number = seq(1, 546, 1))
+
+#Pull in Paper Beta Results
+measles_betas <- read.csv(file = "/Users/Kaitlyn/Documents/Thesis Work /Datasets/measeles biweekly betas.csv", header=TRUE, stringsAsFactors=FALSE)
+
+ny_betas <- measles_betas %>%
+  filter(city == "NEW YORK") %>%
+  select(contains("biweek"))
+
+ny_betas <- unname(unlist(ny_betas[1,]))
+
+rm(measles)
+rm(measles_betas)
+```
+
+```{r Simulate Data, echo=FALSE}
+#Initial Conditions
+ny_betas_rep <- rep(ny_betas, 21)
+i.now <-newyork$cases[1]/.37  #cases at biweek 1 times the average US reporting rate (1/.37) 
+s.now <- 220404 #initial susceptibles (approximated via paper method)
+r.now <- newyork$pop[1] - i.now - s.now
+#rho <- c(rep(2.50, 100), rep(3.50, 150), rep(4.00, 150), rep(2.75, 150))
+
+t<-seq(0,546,1)
+rho <- 0
+for(i in 1:length(t)){
+  rho[i] <- 4*(1+.2*cos((pi/273)*t[i]+550))
+}
+rm(t)
+
+  
+simdata <- Sim(beta=ny_betas_rep, pop=newyork$pop, i.now=i.now, s.now=s.now, r.now=r.now, births=newyork$rec)
+
+#Pull out Simulation Data and Create Time Vector 
+I <- simdata$I
+S_sim <- simdata$S
+C <- I/head(rho, length(I))
+B <- newyork$rec
+n <- newyork$pop
+T<- seq(1, length(I), 1) #number of biweeks
+
+#Clean up Environment
+rm(i.now)
+rm(s.now)
+rm(r.now)
+
+#Plot Simulation
+ggplot(simdata, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  #geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Simulated Measles Dynamics using Seasonally Changing Betas from Paper")
+
+
+ggplot(simdata, aes(x=T)) +
+  geom_line(aes(y=C, col="C")) +
+  geom_line(aes(y=I, col="I"))+
+  labs(x="Biweek", y="Number of Infecteds or Cases", title="Simulated Infected Dynamics vs Simulated Cases")
+```
+
+```{r Susceptible Reconstruction- Linear, echo=FALSE}
+#Linear Method
+cumbirths <- cumsum(B)
+cumcases <- cumsum(C)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cumcases), nrow=length(cumcases)))
+names(cumulativeinfo) <- c("cumbirths", "cumcases")
+
+regression_linear <- lm(cumbirths ~ cumcases) 
+summary(regression_linear)
+Z_linear <- as.vector(resid(regression_linear))
+I_linear <- C*regression_linear[["coefficients"]][[2]] #Reconstructing Infected Class based on Coef of cumcases
+
+ggplot(simdata, aes(x=T))+
+  geom_line(aes(y=Z_linear))+
+  labs(title="Simulated Example - Z from linear regression")#Plot Z - suffers local deviations from mean
+
+```
+
+```{r Choosing Bandwidth, eval=FALSE, include=FALSE}
+h<- seq(0.01, 0.9, 0.01)
+SSE1_gaus <- c()
+for(i in seq_along(h)){
+  SSE1_gaus[i] <- SSE(y=cumbirths, y_hat=gaussian_regression(scale=h[i], biweek=T)[[2]])
+}
+
+SSE2_gaus <- c()
+for(i in seq_along(h)){
+  SSE2_gaus[i] <- SSE(y=y_hat_linear(x=cumcases, y=cumbirths), y_hat=gaussian_regression(scale=h[i], biweek=T)[[2]])
+}
+
+
+ggplot(, aes(x=h)) +
+  geom_line(aes(y=SSE1_gaus, col="SSE1 (guas)")) +
+  geom_line(aes(y=SSE2_gaus, col="SSE2 (gaus)"))
+
+SSE_optim_gaus <- which.min(abs(SSE1_gaus-SSE2_gaus)) #Find where SSE1 and SSE2 intersect
+
+#Select Optimum scale value
+scale_optim_gaus <- h[SSE_optim_gaus]
+
+print(scale_optim_gaus)
+
+```
+
+```{r Reconstruct Z and I, echo=FALSE}
+minimize_er <- minimize_error(C)
+print(minimize_er)
+
+gaus_regression_S <- gaussian_regression(scale=minimize_er[["S_scale"]], biweek=T)
+gaus_regression_I <- gaussian_regression(scale=minimize_er[["I_scale"]], biweek=T)
+
+Z_gaus <- cumbirths - gaus_regression_S$y.fit.gaus
+I_gaus <- C*gaus_regression_I$x.coeffs.gaus.smooth
+
+ggplot(newyork, aes(x=number))+
+  geom_line(aes(y=head(rho, length(T)), col="simulated rho"))+
+  geom_line(aes(y=gaus_regression_I$x.coeffs.gaus.smooth, col="reconstructed rho"))+
+  labs(x="biweek", y="reporting rate", title="Comparing Reconstructed vs Simulated Reporting Rate")
+
+ggplot(newyork, aes(x=number))+
+  geom_line(aes(y=S_sim-mean(S_sim), col="Simulated Susceptibles"))+
+  geom_line(aes(y=Z_gaus, col="Reconstructed Z"))+
+  labs(x="biweek", y="susceptibles", title="Comparing Reconstructed vs Simulated Susceptible Dynamics")
+
+ggplot(newyork, aes(x=number))+
+  geom_line(aes(y=simdata$I, col="Simulated Infecteds"))+
+  geom_line(aes(y=I_gaus, col="Reconstructed Infecteds"))+
+  labs(x="biweek", y="infecteds", title="Comparing Reconstructed vs Simulated Infected Dynamcis")
+
+```
+
+```{r Bayes On Reconstructed Data, eval=FALSE, include=FALSE}
+data_z <- list(N=length(Z_gaus), P=as.integer(newyork$pop), I=as.integer(I_gaus), Z=as.integer(Z_gaus))
+
+Stan_z <- as.character("
+data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+	int <lower=0> I[N]; // infecteds
+	int  Z[N]; // Zt
+}
+
+parameters {
+  real <lower=P[1]/1000, upper= P[N]> Sbar;
+	real<lower=0, upper=200> beta[26];
+}
+
+transformed parameters {
+  real<lower=0, upper=200> betaseq[26*21];
+  for(n in 1:26){
+  for(m in 0:20){
+betaseq[n + 26*m] = beta[n];
+  }
+}
+}
+
+model {
+	//priors
+  Sbar ~ normal(P[1]/3, P[1]/10);
+	beta[26] ~ gamma(10,4);
+
+	//likelihood
+	for (n in 2:N){
+		I[n] ~ neg_binomial_2(betaseq[n-1]*(I[n-1]^.975)*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+	}
+}    ") 
+
+bayes_z <- stan(model_code = Stan_z, data=data_z, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
+```
+
+```{r Bayes Results, eval=FALSE, include=FALSE}
+bayes_z
+```
+
+```{r Check Inference Accuracy, eval=FALSE, include=FALSE}
+ny_betas_bayes <- extract(bayes_z, permuted=TRUE)
+beta_ <- ny_betas_bayes$beta
+
+beta<- matrix(nrow=1000000, ncol=26)
+for(i in 1:26){
+  beta[,i] <- beta_[,i]
+}
+
+lowlimbeta_sr <- c()
+uplimbeta_sr <- c()
+containbeta_sr <- c()
+
+for(i in 1:26){lowlimbeta_sr[i] <- quantile(beta[,i], probs=.025, names=FALSE)
+              uplimbeta_sr[i] <- quantile(beta[,i], probs=.975, names =FALSE)
+              containbeta_sr[i]<- ifelse(lowlimbeta_sr[i] <= ny_betas[i] & uplimbeta_sr[i] >=ny_betas[i], 1, 0)
+}
+
+print(containbeta_sr)
+
+
+#Pull Median Value from posterior of each beta
+ny_beta_estimate <- c()
+for(i in 1:26){
+  ny_beta_estimate[i] <- quantile(beta[,i], probs=.5, names = FALSE)
+}
+
+#take difference of paper values and my estimates
+ny_beta_resid <- ny_beta_estimate - ny_betas
+print(ny_beta_resid)
+beta_percent_error <- ny_beta_resid/ny_betas
+print(beta_percent_error)
+summary(beta_percent_error)
+```
+
+
+
+```{r Local Regression on Real Data, echo=FALSE}
+#Linear Regression (for comparison)
+cumbirths <- cumsum(newyork$rec)
+cumcases <- as.numeric(cumsum(newyork$cases))
+
+regression_linear <- lm(cumbirths ~ cumcases) 
+Z_linear <- as.vector(resid(regression_linear))
+
+# #Choose Best Bandwidth
+# h<- seq(0.01, 0.9, 0.01)
+# SSE1_gaus <- c()
+# for(i in seq_along(h)){
+#   SSE1_gaus[i] <- SSE(y=cumbirths, y_hat=gaussian_regression(scale=h[i], biweek=T)[[1]])
+# }
+# 
+# SSE2_gaus <- c()
+# for(i in seq_along(h)){
+#   SSE2_gaus[i] <- SSE(y=y_hat_linear(x=cumcases, y=cumbirths), y_hat=gaussian_regression(scale=h[i], biweek=newyork$number)[[1]])
+# }
+# 
+# 
+# ggplot(, aes(x=h)) +
+#   geom_line(aes(y=SSE1_gaus, col="SSE1")) +
+#   geom_line(aes(y=SSE2_gaus, col="SSE2"))
+# 
+# SSE_optim_gaus <- which.min(abs(SSE1_gaus-SSE2_gaus)) #Find where SSE1 and SSE2 intersect
+# 
+# scale_optim_gaus <- h[SSE_optim_gaus] #Select Optimum scale value
+# 
+# print(scale_optim_gaus)
+
+
+#Run Local Regression 
+gaus_regression_S <- gaussian_regression(scale=.45, biweek=newyork$number)
+gaus_regression_I <- gaussian_regression(scale=.24, biweek=newyork$number)
+
+Z_gaus <- cumbirths - gaus_regression_S$y.fit.gaus
+I_gaus <- C*gaus_regression_I$x.coeffs.gaus.smooth
+
+
+#Try Lowess Method for S
+regression_lowess <- lowess(cumcases, cumbirths, f=.5, iter=0)
+
+Z_lowess <- cumbirths - regression_lowess$y
+
+
+ggplot(newyork, aes(x=number))+
+  geom_line(aes(y=Z_gaus, col="Local Regression Estimate of Z")) +
+  geom_line(aes(y=Z_linear, col="Linear Regression Estimate of Z")) +
+  geom_line(aes(y=Z_lowess, col="Lowess Regression Estimate of Z"))+
+  labs(x="Biweek", y="Z", title="Comparing Reconstruction Methods")
+
+ggplot(newyork, aes(x=number)) +
+  geom_line(aes(y=cases, col="Reported Cases")) +
+  geom_line(aes(y=I_gaus, col="Estimate of true infecteds"))+
+  labs(x="Biweek", y="Infecteds/Cases", title="Reconstructed Infecteds vs Reported Cases")
+
+ggplot(newyork,aes(x=number)) +
+  geom_line(aes(y=gaus_regression_I$x.coeffs.gaus.smooth))+
+  labs(x="biweek", y="estimated rho", title="Time Varying Reporting Rate Plot")
+
+```
+
+```{r Bayes on Real Data, include=FALSE}
+data_z <- list(N=length(Z_gaus), P=as.integer(newyork$pop), I=as.integer(I_gaus), Z=as.integer(Z_lowess))
+
+Stan_z <- as.character("
+data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+	int <lower=0> I[N]; // infecteds
+	int  Z[N]; // Zt
+}
+
+parameters {
+  real <lower=P[1]/1000, upper= P[N]> Sbar;
+	real<lower=0, upper=200> beta[26];
+}
+
+transformed parameters {
+  real<lower=0, upper=200> betaseq[26*21];
+  for(n in 1:26){
+  for(m in 0:20){
+betaseq[n + 26*m] = beta[n];
+  }
+}
+}
+
+model {
+	//priors
+  Sbar ~ normal(P[1]/3, P[1]/10);
+	beta[26] ~ gamma(10,4);
+
+	//likelihood
+	for (n in 2:N){
+		I[n] ~ neg_binomial_2(betaseq[n-1]*(I[n-1]^.975)*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+	}
+}    ") 
+
+bayes_z <- stan(model_code = Stan_z, data=data_z, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
+```
+
+```{r Bayes Results Real Data}
+bayes_z
+```
+
+```{r Check Accuracy Real Data, echo=FALSE}
+ny_betas_bayes <- extract(bayes_z, permuted=TRUE)
+beta_ <- ny_betas_bayes$beta
+
+beta<- matrix(nrow=1000000, ncol=26)
+for(i in 1:26){
+  beta[,i] <- beta_[,i]
+}
+
+lowlimbeta_sr <- c()
+uplimbeta_sr <- c()
+containbeta_sr <- c()
+
+for(i in 1:26){lowlimbeta_sr[i] <- quantile(beta[,i], probs=.025, names=FALSE)
+              uplimbeta_sr[i] <- quantile(beta[,i], probs=.975, names =FALSE)
+              containbeta_sr[i]<- ifelse(lowlimbeta_sr[i] <= ny_betas[i] & uplimbeta_sr[i] >=ny_betas[i], 1, 0)
+}
+
+print(containbeta_sr)
+
+ny_beta_estimate <- c()
+for(i in 1:26){
+  ny_beta_estimate[i] <- quantile(beta[,i], probs=.5, names = FALSE)
+}
+
+#take difference of paper values and my estimates
+ny_beta_resid <- ny_beta_estimate - ny_betas
+plot(ny_beta_resid)
+beta_percent_error <- ny_beta_resid/ny_betas
+plot(beta_percent_error)
+summary(beta_percent_error)
+```
+
+
+
+```{r Save Old Code, eval=FALSE, include=FALSE}
+save_data_gaussian_smoothed_3_28 <- list(ny_beta_resid, bayes_z, data=list(simdata, rho, C, Z.gaus, I.gaus.smooth, reg.tri, reg.gaus))
+
+save_data_2_3_38 <- list(ny_beta_resid, beta_percent_error, bayes_z, data=list(simdata, rho, C, Z_gaus, I_gaus, minimize_error, gaus_regression))
+```
+
+
+
+```{r Old Local Regression, eval=FALSE, include=FALSE}
+#Step 1: define window width "m" such that for each focal x, we select the m nearest neighbors in terms of x value.
+ord <- order(cumcases)
+c.cases <- cumcases[ord] #order cumbirths from least to greatest
+c.births <- cumbirths[ord] #order cumcases from least to greatest SAME AS CUMCASES AND CUMBIRTHS
+
+m <- floor(length(cumcases)*(scale_optim)) #window width
+h <- m/2
+
+x0<-0
+diffs<-matrix(nrow=length(cumcases), ncol=length(cumcases))
+which.diff<-0
+x.n <- matrix(nrow=length(cumcases), ncol=m)
+y.n <- matrix(nrow=length(cumcases), ncol=m)
+for(i in 1:length(cumcases)){
+x0[i] <- c.cases[i] #set focal x 
+diffs[i,] <- abs(c.cases - x0[i]) #difference between each datapoint and x0 (x value difference)
+which.diff[i] <- sort(diffs[i,])[m] #This returns the mth smallest difference between c.births and x0. 
+
+x.n[i,] <- c.cases[diffs[i,] <= which.diff[i]] #select m closest x values to focal x
+y.n[i,] <- c.births[diffs[i,] <= which.diff[i]] #select m closest corresponding y valeus 
+}
+
+#Define Weight Functions: Gaussian and Tricube 
+tricube <- function(z) {
+  ifelse(abs(z)<1, (1-(abs(z))^3)^3, 0)
+}
+
+gaussian_kernel <- function(x) {
+  (1/sqrt(2*pi))*exp(-x^2/2)
+}
+
+gaussian_sum <- function(i,m) {
+  gaussian_sum <- 0
+  for(k in 1:m){
+      gaussian_sum <- sum(gaussian_kernel((x.n[i,k]-x0[i])/which.diff[i]))
+      return(gaussian_sum)
+    }
+}
+
+
+#TRICUBE: Run Weighted Linear Regression and Obtain Coefficients, Fitted Values, and Residuals
+x.wt.tri <- matrix(nrow=length(cumcases), ncol=m)
+x.coeffs.tri <- 0
+y.fit.tri <- 0
+for(i in 1:length(cumcases)){
+  for(k in 1:m){
+x.wt.tri[i,k]<- tricube(z=(x.n[i,k] - x0[i])/which.diff[i]) #weights 
+}
+}
+
+
+reg.tri <- lapply(1:length(cumcases), function(x) lm(y.n[x,]~x.n[x,], weights = x.wt.tri[x,])) #run regression for each x
+
+x.coeffs.tri <-0
+x.intercept.tri<-0
+y.fit.tri <- 0
+for(i in 1:length(reg.tri)){
+  x.coeffs.tri[i] <- as.numeric(coef(reg.tri[[i]])[2])
+  x.intercept.tri[i] <- as.numeric(coef(reg.tri[[i]])[1])
+  y.fit.tri[i] <- x.coeffs.tri[i]*c.cases[i]+x.intercept.tri[i]
+}
+
+Z.tri <- cumbirths - y.fit.tri
+I.tri <- I*x.coeffs.tri #recovered infecteds using local regression coefficients 
+
+#GAUSSIAN: Run Weighted Linear Regression and Obtain Coefficients, Fitted Values, and Residuals
+x.wt.gaus <- matrix(nrow=length(cumcases), ncol=m)
+x.coeffs.gaus <- 0
+for(i in 1:length(cumcases)){
+  for(k in 1:m){
+x.wt.gaus[i,k]<- gaussian_kernel(x=(x.n[i,k] - x0[i])/which.diff[i])/gaussian_sum(i)
+}
+}
+
+
+reg.gaus <- lapply(1:length(cumcases), function(x) lm(y.n[x,]~x.n[x,], weights = x.wt.gaus[x,]))
+
+x.coeffs.gaus <-0
+x.intercept.gaus <-0
+y.fit.gaus <- 0
+for(i in 1:length(reg.gaus)){
+  x.coeffs.gaus[i] <- as.numeric(coef(reg.gaus[[i]])[2])
+  x.intercept.gaus[i] <- as.numeric(coef(reg.gaus[[i]])[1])
+  y.fit.gaus[i] <- x.coeffs.gaus[i]*c.cases[i]+x.intercept.gaus[i]
+}
+
+Z.gaus <- cumbirths - y.fit.gaus
+I.gaus <- C*x.coeffs.gaus
+
+#Check out Difference between simulated rho and estimated x.coeffs:
+rho_dif <- function(x){
+rho_dif <- 0
+for(i in 1:length(x)){
+  rho_dif[i] <- abs(x[i] - rho[i])
+}
+return(summary(rho_dif))
+}
+
+rho_dif(x.coeffs.gaus)
+rho_dif(x.coeffs.tri)
+
+#Plot Susceptible Reconstruction Data (Z)
+ggplot(simdata, aes(x=T)) +
+  geom_line(aes(y=Z_linear, col="Linear"))+
+  geom_line(aes(y=Z.tri, col="Tricube")) +
+  geom_line(aes(y=Z.gaus, col="Gaussian")) +
+  labs(x="biweek", y="reconstructed Z", title="Comparison of Reconstruction Methods")
+
+#Plot Rho Estimations
+ggplot(simdata, aes(x=T))+
+  geom_line(aes(y=head(rho,length(T)), col="simulated rho"))+
+  geom_line(aes(y=x.coeffs.gaus, col="gaussian rho estimate"))+
+  geom_line(aes(y=x.coeffs.tri, col="tricube rho estimate"))+
+  labs(x="Biweek", y="Rho", title="Comparison of Gaussian and Tricube Methods for Obtaining Rho")
+
+gaussian_smoothed <- fitted(loess(x.coeffs.gaus ~ T))
+rho_dif(gaussian_smoothed)
+
+ggplot(simdata, aes(x=T))+
+  geom_line(aes(y=head(rho,length(T)), col="simulated rho"))+
+  geom_line(aes(y=x.coeffs.gaus, col="ggplot smoothed gaussian rho estimate"))+
+  geom_line(aes(y=gaussian_smoothed, col="smoothed gaussian estimate"))
+
+
+Z.gaus.smooth <- cumbirths - y.fit.gaus
+I.gaus.smooth <- C*gaussian_smoothed
+
+
+ggplot(simdata, aes(x=T))+
+  geom_line(aes(y=S_sim-mean(S_sim), col="Simulated Susceptibles")) +
+  geom_line(aes(y=Z.gaus, col="Gaussian Unsmoothed")) +
+  geom_line(aes(y=Z_linear, col="Linear"))
+
+ggplot(simdata, aes(x=T))+
+  geom_line(aes(y=I, col="Simulated Infecteds")) +
+  #geom_line(aes(y=I.gaus, col="Gaussian Unsmoothed")) +
+  geom_line(aes(y=I.gaus.smooth, col="Gaussian Smoothed")) #+
+  #geom_line(aes(y=I_linear, col="Linear"))
+```
+
+```{r SR Local Linear, eval=FALSE, include=FALSE}
+#Step 1: define window width "m" such that for each focal x, we select the m nearest neighbors in terms of x value.
+ord <- order(cumcases)
+c.cases <- cumcases[ord] #order cumbirths from least to greatest
+c.births <- cumbirths[ord] #order cumcases from least to greatest SAME AS CUMCASES AND CUMBIRTHS
+
+m <- floor(length(cumcases)*(.5)) #window width
+h <- m/2
+
+x0<-0
+diffs<-matrix(nrow=length(cumcases), ncol=length(cumcases))
+which.diff<-0
+x.n <- matrix(nrow=length(cumcases), ncol=m)
+y.n <- matrix(nrow=length(cumcases), ncol=m)
+for(i in 1:length(cumcases)){
+x0[i] <- c.cases[i] #set focal x 
+diffs[i,] <- abs(c.cases - x0[i]) #difference between each datapoint and x0 (x value difference)
+which.diff[i] <- sort(diffs[i,])[m] #This returns the mth smallest difference between c.births and x0. 
+
+x.n[i,] <- c.cases[diffs[i,] <= which.diff[i]] #select m closest x values to focal x
+y.n[i,] <- c.births[diffs[i,] <= which.diff[i]] #select m closest corresponding y valeus 
+}
+
+#Define Weight Functions: Gaussian and Tricube 
+tricube <- function(z) {
+  ifelse(abs(z)<1, (1-(abs(z))^3)^3, 0)
+}
+
+gaussian_kernel <- function(x) {
+  (1/sqrt(2*pi))*exp(-x^2/2)
+}
+
+gaussian_sum <- function(i, m) {
+  gaussian_sum <- 0
+  for(k in 1:m){
+      gaussian_sum <- sum(gaussian_kernel((x.n[i,k]-x0[i])/which.diff[i]))
+      return(gaussian_sum)
+    }
+}
+
+
+#TRICUBE: Run Weighted Linear Regression and Obtain Coefficients, Fitted Values, and Residuals
+x.wt.tri <- matrix(nrow=length(cumcases), ncol=m)
+x.coeffs.tri <- 0
+y.fit.tri <- 0
+for(i in 1:length(cumcases)){
+  for(k in 1:m){
+x.wt.tri[i,k]<- tricube(z=(x.n[i,k] - x0[i])/which.diff[i]) #weights 
+}
+}
+
+
+reg.tri <- lapply(1:length(cumcases), function(x) lm(y.n[x,]~x.n[x,], weights = x.wt.tri[x,])) #run regression for each x
+
+x.coeffs.tri <-0
+x.intercept.tri<-0
+y.fit.tri <- 0
+for(i in 1:length(reg.tri)){
+  x.coeffs.tri[i] <- as.numeric(coef(reg.tri[[i]])[2])
+  x.intercept.tri[i] <- as.numeric(coef(reg.tri[[i]])[1])
+  y.fit.tri[i] <- x.coeffs.tri[i]*c.cases[i]+x.intercept.tri[i]
+}
+
+Z.tri <- cumbirths - y.fit.tri
+I.tri <- I*x.coeffs.tri #recovered infecteds using local regression coefficients 
+
+#GAUSSIAN: Run Weighted Linear Regression and Obtain Coefficients, Fitted Values, and Residuals
+x.wt.gaus <- matrix(nrow=length(cumcases), ncol=m)
+x.coeffs.gaus <- 0
+for(i in 1:length(cumcases)){
+  for(k in 1:m){
+x.wt.gaus[i,k]<- gaussian_kernel(x=(x.n[i,k] - x0[i])/which.diff[i])/gaussian_sum(i, m)
+}
+}
+
+
+reg.gaus <- lapply(1:length(cumcases), function(x) lm(y.n[x,]~x.n[x,], weights = x.wt.gaus[x,]))
+
+x.coeffs.gaus <-0
+x.intercept.gaus <-0
+y.fit.gaus <- 0
+for(i in 1:length(reg.gaus)){
+  x.coeffs.gaus[i] <- as.numeric(coef(reg.gaus[[i]])[2])
+  x.intercept.gaus[i] <- as.numeric(coef(reg.gaus[[i]])[1])
+  y.fit.gaus[i] <- x.coeffs.gaus[i]*c.cases[i]+x.intercept.gaus[i]
+}
+
+Z.gaus <- cumbirths - y.fit.gaus
+I.gaus <- I*x.coeffs.gaus
+
+#Check out Difference between simulated rho and estimated x.coeffs:
+rho_dif <- function(x){
+rho_dif <- 0
+for(i in 1:length(x)){
+  rho_dif[i] <- x[i] - rho[i]
+}
+return(summary(rho_dif))
+}
+
+rho_dif(x.coeffs.gaus)
+rho_dif(x.coeffs.tri)
+
+#Plot Susceptible Reconstruction Data (Z)
+ggplot(simdata, aes(x=T)) +
+  geom_line(aes(y=Z.tri, col="Z.tri")) +
+  geom_line(aes(y=Z_linear, col="Z_linear"))+
+  geom_line(aes(y=Z.gaus, col="Z.gaus")) +
+  labs(x="biweek", y="reconstructed Z", title="Comparison of Reconstruction Methods")
+
+```
+
+```{r GRAVEYARD, eval=FALSE, include=FALSE}
+ggplot(,aes(x=seq(1,26,1)))+
+  geom_line(aes(y=ny_betas, col="Betas")) +
+  geom_line(aes(y=ny_beta_resid, col="Beta Residual"))
+
+summary(lm(ny_beta_resid~ny_betas))
+
+#reg.tri[i]<- lm(y.n[i,]~x.n[i,], weights = x.wt.tri[i,])
+#x.coeffs.tri[i] <- as.numeric(coef(reg.tri[i])[2])
+#y.fit.tri[i] <- fitted(lm(y.n[i,]~x.n[i,], weights = x.wt.tri[i,]))[i]
+#x.coeffs.tri[i] <- as.numeric(coef(lm(y.n[i,]~x.n[i,], weights = x.wt.tri[i,]))[2]) #pulls the slope for each xi
+
+SSE1_ <- lapply(1:length(h), function(x) SSE(y=cumbirths, y_hat=y_hat_gaus(scale=h[x])))
+SSE2_ <- lapply(1:length(h), function(x) SSE(y=y_hat_linear(x=cumcases, y=cumbirths), y_hat=y_hat_gaus(scale=h[x])))
+
+
+
+gaussian_regression <- function(scale){
+  ord <- order(cumcases)
+  c.cases <- cumcases[ord] 
+  c.births <- cumbirths[ord] 
+
+  m <- floor(length(cumcases)*(scale)) #SCALE GOES HERE
+  h <- m/2
+
+  x0<-0
+  diffs<-matrix(nrow=length(cumcases), ncol=length(cumcases))
+  which.diff<-0
+  x.n <- matrix(nrow=length(cumcases), ncol=m)
+  y.n <- matrix(nrow=length(cumcases), ncol=m)
+
+  for(i in 1:length(cumcases)){
+  x0[i] <- c.cases[i] #set focal x 
+  diffs[i,] <- abs(c.cases - x0[i]) #difference between each datapoint and x0 (x value difference)
+  which.diff[i] <- sort(diffs[i,])[m] #This returns the mth smallest difference between c.births and x0. 
+
+  x.n[i,] <- c.cases[diffs[i,] <= which.diff[i]] #select m closest x values to focal x
+  y.n[i,] <- c.births[diffs[i,] <= which.diff[i]] #select m closest corresponding y valeus 
+  }
+
+  #Define Weight Functions: Gaussian and Tricube 
+tricube <- function(z) {
+  ifelse(abs(z)<1, (1-(abs(z))^3)^3, 0)
+}
+
+gaussian_kernel <- function(x) {
+  (1/sqrt(2*pi))*exp(-x^2/2)
+}
+
+gaussian_sum <- function(i) {
+  gaussian_sum <- 0
+  for(k in 1:m){
+      gaussian_sum <- sum(gaussian_kernel((x.n[i,k]-x0[i])/which.diff[i]))
+      return(gaussian_sum)
+    }
+}
+  
+  x.wt.gaus <- matrix(nrow=length(cumcases), ncol=m)
+  x.coeffs.gaus <- 0
+  for(i in 1:length(cumcases)){
+    for(k in 1:m){
+  x.wt.gaus[i,k]<- gaussian_kernel(x=(x.n[i,k] - x0[i])/which.diff[i])/gaussian_sum(i)
+  }
+  }
+  
+  reg.gaus <- lapply(1:length(cumcases), function(x) lm(y.n[x,]~x.n[x,], weights = x.wt.gaus[x,]))
+
+  x.coeffs.gaus <-0
+  x.intercept.gaus <-0
+  y.fit.gaus <- 0
+  for(i in 1:length(reg.gaus)){
+    x.coeffs.gaus[i] <- as.numeric(coef(reg.gaus[[i]])[2])
+    x.intercept.gaus[i] <- as.numeric(coef(reg.gaus[[i]])[1])
+    y.fit.gaus[i] <- x.coeffs.gaus[i]*c.cases[i]+x.intercept.gaus[i]
+  }
+
+return(list(y.fit.gaus, x.coeffs.gaus, x.intercept.gaus))
+}
+
+gaussian_regression <- function(scale){
+  ord <- order(cumcases)
+  c.cases <- cumcases[ord] 
+  c.births <- cumbirths[ord] 
+
+  m <- floor(length(cumcases)*(scale)) #SCALE GOES HERE
+  h <- m/2
+
+  x0<-0
+  diffs<-matrix(nrow=length(cumcases), ncol=length(cumcases))
+  which.diff<-0
+  x.n <- matrix(nrow=length(cumcases), ncol=m)
+  y.n <- matrix(nrow=length(cumcases), ncol=m)
+
+  for(i in 1:length(cumcases)){
+  x0[i] <- c.cases[i] #set focal x 
+  diffs[i,] <- abs(c.cases - x0[i]) #difference between each datapoint and x0 (x value difference)
+  which.diff[i] <- sort(diffs[i,])[m] #This returns the mth smallest difference between c.births and x0. 
+
+  x.n[i,] <- c.cases[diffs[i,] <= which.diff[i]] #select m closest x values to focal x
+  y.n[i,] <- c.births[diffs[i,] <= which.diff[i]] #select m closest corresponding y valeus 
+  }
+
+  #Define Weight Functions: Gaussian and Tricube 
+tricube <- function(z) {
+  ifelse(abs(z)<1, (1-(abs(z))^3)^3, 0)
+}
+
+gaussian_kernel <- function(x) {
+  (1/sqrt(2*pi))*exp(-x^2/2)
+}
+
+gaussian_sum <- function(i) {
+  gaussian_sum <- 0
+  for(k in 1:m){
+      gaussian_sum <- sum(gaussian_kernel((x.n[i,k]-x0[i])/which.diff[i]))
+      return(gaussian_sum)
+    }
+}
+  
+  x.wt.gaus <- matrix(nrow=length(cumcases), ncol=m)
+  x.coeffs.gaus <- 0
+  for(i in 1:length(cumcases)){
+    for(k in 1:m){
+  x.wt.gaus[i,k]<- gaussian_kernel(x=(x.n[i,k] - x0[i])/which.diff[i])/gaussian_sum(i)
+  }
+  }
+  
+  reg.gaus <- lapply(1:length(cumcases), function(x) lm(y.n[x,]~x.n[x,], weights = x.wt.gaus[x,]))
+
+  x.coeffs.gaus <-0
+  x.intercept.gaus <-0
+  y.fit.gaus <- 0
+  for(i in 1:length(reg.gaus)){
+    x.coeffs.gaus[i] <- as.numeric(coef(reg.gaus[[i]])[2])
+    x.intercept.gaus[i] <- as.numeric(coef(reg.gaus[[i]])[1])
+    y.fit.gaus[i] <- x.coeffs.gaus[i]*c.cases[i]+x.intercept.gaus[i]
+  }
+  
+x.coeffs.gaus.smooth <-  x.coeffs.gaus.smooth <- fitted(loess(x.coeffs.gaus ~ T))
+y.fit.gaus.smooth <-0
+for(i in 1:length(x.coeffs.gaus.smooth)){
+  y.fit.gaus.smooth[i] <- x.coeffs.gaus.smooth[i]*c.cases[i] + x.intercept.gaus[i]
+}
+
+return(list(y.fit.gaus=y.fit.gaus, y.fit.gaus.smooth=y.fit.gaus.smooth, x.coeffs.gaus=x.coeffs.gaus, x.coeffs.gaus.smooth=x.coeffs.gaus.smooth))
+}
+
+minimize_error <- function(scale){
+  gaus_regression <- gaussian_regression(scale)
+  tri_regression <- tricube_regression(scale)
+
+  I.gaus.s <- C*gaus_regression$x.coeffs.gaus.smooth
+  Z.gaus.u <- cumbirths - gaus_regression$y.fit.gaus
+  I.tri.s <- C*tri_regression$x.coeffs.tri.smooth
+  Z.tri.u <- cumbirths - tri_regression$y.fit.tri
+
+  Z_options <- list(Z_gaussian=Z.gaus.u, Z_tricube=Z.tri.u)
+  I_options <- list(I_gaussian=I.gaus.s, I_tricube=I.tri.s)
+  
+  S_errors <- 0
+  for(i in 1:length(Z_options)){
+    S_errors[i] <- mean(S_error(Z_options[[i]]))
+  }
+  
+  S_optim <- which.min(S_errors)
+  
+  return(Z_options[S_optim])
+}
+```
+

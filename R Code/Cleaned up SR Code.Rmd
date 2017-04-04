@@ -1,0 +1,761 @@
+---
+title: "Susceptible Reconstruction With Noise"
+author: "Kaitlyn Stocker"
+date: "2/7/2017"
+output: html_document
+---
+```{r, include=FALSE}
+library(rstan)
+library(ggplot2)
+```
+
+```{r, include=FALSE}
+#Initial Conditions
+n.now <- 763000
+s.now <- 762995
+i.now <- n.now-s.now
+r.now <- 0
+beta <- 8
+birthrate <-.0005 #rgamma(1, shape=2, scale=.000215)
+b.now <- 0
+
+#Small Sample Size Initials 
+n.small <- 76300
+s.small <- 76295
+i.small <- n.small - s.small
+
+n.smaller <- 7630
+s.smaller <- 7625
+i.smaller <- n.small - s.small
+
+#Noise Conditions
+s.noise.low <- rnorm(1,0,n.now/1000)
+s.noise.high <- rnorm(1,0,n.now/100)
+s.noise.mid <- rnorm(1,0,n.now/500)
+
+i.noise.low <- abs(rnorm(1,1,.005))
+i.noise.mid <- abs(rnorm(1,1,.01))
+i.noise.high <- abs(rnorm(1,1,.05))
+  
+
+#Stan Code
+Stan_reconstructed <- as.character("
+data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+  real time_added[N];
+	int <lower=0> I[N]; // infecteds 
+	int  Z[N]; // Zt 
+}
+
+parameters {
+  real <lower=P[1]/100, upper= P[N]> Sbar;
+	real<lower=0, upper=5> beta;
+  real<lower=0, upper=5> gamma;
+}
+
+model {
+	//priors
+  Sbar ~ normal(P[1]/2, P[1]/10);
+	beta ~ gamma(3, 1);
+  gamma ~ gamma(2,1);
+
+	//likelihood
+	for (n in 2:N){
+		I[n] ~ neg_binomial_2(beta*I[n-1]*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+    time_added[n]~exponential_log(gamma);
+  }
+}    ")
+
+
+Stan_sim <- as.character("
+                            data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+  real time_added[N];
+	int <lower=0> I[N];
+	int <lower=0> S[N];
+}
+
+
+parameters {
+	real<lower=0, upper=5> beta;
+  real<lower=0, upper=5> gamma;
+
+}
+
+model {
+	//priors
+	beta ~ gamma(3, 1);
+  gamma ~ gamma(2,1);
+	//likelihood
+	for (n in 2:N){
+		I[n] ~ neg_binomial_2(beta*I[n-1]*S[n-1]/P[n-1], I[n-1]);
+    time_added[n]~exponential_log(gamma);
+  }
+}     ")
+```
+
+Small Sample Size (N_initial = 76,300)
+```{r, echo=FALSE}
+#Simulate Epidemic Dynamics 
+Sim_small_ss <- function(beta, n.now, i.now, s.now, r.now, b.now) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now, b.now, n.now), nrow=1))
+names(results) <- c("I", "S", "R", "B", "N")
+  while(s.now*i.now >0){
+    i.next <- rnbinom(n=1, mu=beta*i.now*s.now/n.now, size=i.now) 
+    b.now <- rgamma(1, shape=2, scale=.000215)*n.now
+    s.now <- s.now - i.next + b.now
+    r.now <- r.now + i.now
+    n.now <- n.now + b.now 
+    i.now <- i.next
+    results <- rbind(results, c(i.now, s.now, r.now, b.now, n.now))
+  }
+return(results)
+}
+
+simdata_small_ss <- Sim_small_ss(beta=beta, n.now=n.small, i.now=i.small, s.now=s.small, r.now=r.now, b.now=b.now)
+
+#Pull out Simulation Data and Create Time Vector 
+I <- simdata_small_ss$I
+B <- simdata_small_ss$B
+S_sim <- simdata_small_ss$S
+n <- simdata_small_ss$N
+R <- simdata_small_ss$R
+T<- cumsum(rexp(length(I), rate=(1/2.2)))
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+population_check <- 0
+for(i in 1:length(I)){
+population_check[i] <- I[i] + S_sim[i] + R[i] -n[i]
+}
+
+population_check
+
+#Plot Simulation
+ggplot(simdata_small_ss, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Simulated Dynamics, Population Size 76,300")
+
+#Reconstructing Z dynamics 
+cumbirths <- cumsum(B)
+cuminfecteds <- cumsum(I)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cuminfecteds), nrow=length(cuminfecteds)))
+names(cumulativeinfo) <- c("cumbirths", "cuminfecteds")
+
+regression <- lm(cumbirths ~ 1, offset=(cuminfecteds))
+
+Z <- as.vector(resid(regression))
+```
+```{r, include=FALSE}
+#Run Bayes
+data_reconstructed <- list(N=length(I), P=as.integer(n), I=as.integer(I), Z=as.integer(Z), time_added=time_added)
+
+bayes_reconstructed <- stan(model_code = Stan_reconstructed, data=data_reconstructed, iter=500000, chains=4)
+
+#Run Bayes for Simulation
+data_sim <- list(N=length(I), P=as.integer(n), I=as.integer(I), S=as.integer(S_sim), time_added=time_added)
+
+bayes_sim <- stan(model_code = Stan_sim, data=data_sim, iter=500000, chains=4)
+```
+```{r, echo=FALSE}
+#Plot S_reconstructed
+Sbar <- extract(bayes_reconstructed, 'Sbar')
+Sbar <- unlist(Sbar, use.names=FALSE)
+lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+
+S_lower <- lowlim_Sbar + Z
+S_upper <- uplim_Sbar + Z
+
+ggplot(simdata_small_ss, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_lower, col="S_lower"))+
+  geom_line(aes(y=S_upper, col="S_upper"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Dynamics")
+```
+```{r}
+bayes_sim
+bayes_reconstructed
+```
+
+Small Sample Size (N_initial = 7,630)
+```{r, echo=FALSE}
+simdata_smaller_ss <- Sim_small_ss(beta=beta, n.now=n.smaller, i.now=i.smaller, s.now=s.smaller, r.now=r.now, b.now=b.now)
+
+#Pull out Simulation Data and Create Time Vector 
+I <- simdata_smaller_ss$I
+B <- simdata_smaller_ss$B
+S_sim <- simdata_smaller_ss$S
+n <- simdata_smaller_ss$N
+T<- cumsum(rexp(length(I), rate=(1/2.2)))
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+#Plot Simulation
+ggplot(simdata_smaller_ss, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Simulated Dynamics, Population Size 7,630")
+
+#Reconstructing Z dynamics 
+cumbirths <- cumsum(B)
+cuminfecteds <- cumsum(I)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cuminfecteds), nrow=length(cuminfecteds)))
+names(cumulativeinfo) <- c("cumbirths", "cuminfecteds")
+
+regression <- lm(cumbirths ~ 1, offset=(cuminfecteds))
+
+Z <- as.vector(resid(regression))
+```
+```{r, include=FALSE}
+#Run Bayes
+data_reconstructed <- list(N=length(I), P=as.integer(n), I=as.integer(I), Z=as.integer(Z), time_added=time_added)
+
+bayes_reconstructed <- stan(model_code = Stan_reconstructed, data=data_reconstructed, iter=500000, chains=4)
+
+#Run Bayes for Simulation
+data_sim <- list(N=length(I), P=as.integer(n), I=as.integer(I), S=as.integer(S_sim), time_added=time_added)
+
+bayes_sim <- stan(model_code = Stan_sim, data=data_sim, iter=500000, chains=4)
+```
+```{r, echo=FALSE}
+#Plot S_reconstructed
+Sbar <- extract(bayes_reconstructed, 'Sbar')
+Sbar <- unlist(Sbar, use.names=FALSE)
+lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+
+S_lower <- lowlim_Sbar + Z
+S_upper <- uplim_Sbar + Z
+
+ggplot(simdata_smaller_ss, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_lower, col="S_lower"))+
+  geom_line(aes(y=S_upper, col="S_upper"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Dynamics")
+```
+```{r}
+bayes_sim
+bayes_reconstructed
+```
+
+
+Adding Noise to the Susceptible Class: Low Noise 
+```{r, echo=FALSE}
+#Simulate Epidemic Dynamics 
+Sim_snoise <- function(beta, n.now, i.now, s.now, r.now, b.now, s.noise) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now, b.now, n.now), nrow=1))
+names(results) <- c("I", "S", "R", "B", "N")
+  while(s.now*i.now >0){
+    i.next <- rnbinom(n=1, mu=beta*i.now*s.now/n.now, size=i.now) 
+    s.now <- s.now - i.next + b.now + s.noise
+    r.now <- r.now + i.now
+    b.now <- rgamma(1, shape=2, scale=.000215)*n.now
+    n.now <- n.now + b.now 
+    i.now <- i.next
+    results <- rbind(results, c(i.now, s.now, r.now, b.now, n.now))
+  }
+return(results)
+}
+
+s.noise.low <- rnorm(1,0,n.now/1000)
+s.noise.high <- rnorm(1,0,n.now/100)
+s.noise.mid <- rnorm(1,0,n.now/500)
+
+simdata_snoise_low <- Sim_snoise(beta=beta, n.now=n.now, i.now=i.now, s.now=s.now, r.now=r.now, b.now=b.now, s.noise=s.noise.low)
+
+#Pull out Simulation Data and Create Time Vector 
+I <- simdata_snoise_low$I
+B <- simdata_snoise_low$B
+S_sim <- simdata_snoise_low$S
+n <- simdata_snoise_low$N
+T<- cumsum(rexp(length(I), rate=(1/2.2)))
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+#Plot Simulation
+ggplot(simdata_snoise_low, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Simulated Dynamics with Noise in Susceptible Class, where noise~N(0,n[t-1]/1000)")
+
+#Reconstructing Z dynamics 
+cumbirths <- cumsum(B)
+cuminfecteds <- cumsum(I)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cuminfecteds), nrow=length(cuminfecteds)))
+names(cumulativeinfo) <- c("cumbirths", "cuminfecteds")
+
+regression <- lm(cumbirths ~ 1, offset=(cuminfecteds))
+
+Z <- as.vector(resid(regression))
+
+```
+```{r, include=FALSE}
+#Run Bayes
+data_reconstructed <- list(N=length(I), P=as.integer(n), I=as.integer(I), Z=as.integer(Z), time_added=time_added)
+
+bayes_reconstructed <- stan(model_code = Stan_reconstructed, data=data_reconstructed, iter=500000, chains=4)
+
+#Run Bayes for Simulation
+data_sim <- list(N=length(I), P=as.integer(n), I=as.integer(I), S=as.integer(S_sim), time_added=time_added)
+
+bayes_sim <- stan(model_code = Stan_sim, data=data_sim, iter=500000, chains=4)
+```
+```{r, echo=FALSE}
+#Plot S_reconstructed
+Sbar <- extract(bayes_reconstructed, 'Sbar')
+Sbar <- unlist(Sbar, use.names=FALSE)
+lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+
+S_lower <- lowlim_Sbar + Z
+S_upper <- uplim_Sbar + Z
+
+ggplot(simdata_snoise_low, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_lower, col="S_lower"))+
+  geom_line(aes(y=S_upper, col="S_upper"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Dynamics")
+```
+```{r}
+bayes_sim
+bayes_reconstructed
+```
+
+Adding Noise to the Susceptible Class: High Noise
+```{r, echo=FALSE}
+simdata_snoise_high <- Sim_snoise(beta=beta, n.now=n.now, i.now=i.now, s.now=s.now, r.now=r.now, b.now=b.now, s.noise=s.noise.high)
+
+#Pull out Simulation Data and Create Time Vector 
+I <- simdata_snoise_high$I
+B <- simdata_snoise_high$B
+S_sim <- simdata_snoise_high$S
+n <- simdata_snoise_high$N
+T<- cumsum(rexp(length(I), rate=(1/2.2)))
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+#Plot Simulation
+ggplot(simdata_snoise_high, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Simulated Dynamics with Noise in Susceptible Class, where noise~N(0,n[t-1]/100)")
+
+#Reconstructing Z dynamics 
+cumbirths <- cumsum(B)
+cuminfecteds <- cumsum(I)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cuminfecteds), nrow=length(cuminfecteds)))
+names(cumulativeinfo) <- c("cumbirths", "cuminfecteds")
+
+regression <- lm(cumbirths ~ 1, offset=(cuminfecteds))
+
+Z <- as.vector(resid(regression))
+```
+```{r, include=FALSE}
+#Run Bayes
+data_reconstructed <- list(N=length(I), P=as.integer(n), I=as.integer(I), Z=as.integer(Z), time_added=time_added)
+
+bayes_reconstructed <- stan(model_code = Stan_reconstructed, data=data_reconstructed, iter=500000, chains=4)
+
+#Run Bayes for Simulation
+data_sim <- list(N=length(I), P=as.integer(n), I=as.integer(I), S=as.integer(S_sim), time_added=time_added)
+
+bayes_sim <- stan(model_code = Stan_sim, data=data_sim, iter=500000, chains=4)
+```
+```{r, echo=FALSE}
+#Plot S_reconstructed
+Sbar <- extract(bayes_reconstructed, 'Sbar')
+Sbar <- unlist(Sbar, use.names=FALSE)
+lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+
+S_lower <- lowlim_Sbar + Z
+S_upper <- uplim_Sbar + Z
+
+ggplot(simdata_snoise_high, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_lower, col="S_lower"))+
+  geom_line(aes(y=S_upper, col="S_upper"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Dynamics")
+```
+```{r}
+bayes_sim
+bayes_reconstructed
+```
+
+Adding Noise to the Susceptible Class: Mid Noise 
+```{r, echo=FALSE}
+simdata_snoise_mid <- Sim_snoise(beta=beta, n.now=n.now, i.now=i.now, s.now=s.now, r.now=r.now, b.now=b.now, s.noise=s.noise.mid)
+
+#Pull out Simulation Data and Create Time Vector 
+I <- simdata_snoise_mid$I
+B <- simdata_snoise_mid$B
+S_sim <- simdata_snoise_mid$S
+n <- simdata_snoise_mid$N
+T<- cumsum(rexp(length(I), rate=(1/2.2)))
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+#Plot Simulation
+ggplot(simdata_snoise_mid, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Simulated Dynamics with Noise in Susceptible Class, where noise~N(0,n[t-1]/500)")
+
+#Reconstructing Z dynamics 
+cumbirths <- cumsum(B)
+cuminfecteds <- cumsum(I)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cuminfecteds), nrow=length(cuminfecteds)))
+names(cumulativeinfo) <- c("cumbirths", "cuminfecteds")
+
+regression <- lm(cumbirths ~ 1, offset=(cuminfecteds))
+
+Z <- as.vector(resid(regression))
+
+```
+```{r, include=FALSE}
+#Run Bayes for Reconstruction 
+data_reconstructed <- list(N=length(I), P=as.integer(n), I=as.integer(I), Z=as.integer(Z), time_added=time_added)
+
+bayes_reconstructed <- stan(model_code = Stan_reconstructed, data=data_reconstructed, iter=500000, chains=4)
+
+#Run Bayes for Simulation
+data_sim <- list(N=length(I), P=as.integer(n), I=as.integer(I), S=as.integer(S_sim), time_added=time_added)
+
+bayes_sim <- stan(model_code = Stan_sim, data=data_sim, iter=500000, chains=4)
+```
+```{r, echo=FALSE}
+#Plot S_reconstructed
+Sbar <- extract(bayes_reconstructed, 'Sbar')
+Sbar <- unlist(Sbar, use.names=FALSE)
+lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+
+S_lower <- lowlim_Sbar + Z
+S_upper <- uplim_Sbar + Z
+
+ggplot(simdata_snoise_mid, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_lower, col="S_lower"))+
+  geom_line(aes(y=S_upper, col="S_upper"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Dynamics")
+```
+```{r}
+bayes_sim
+bayes_reconstructed
+```
+
+Adding Noise to the Infected Class:Low Noise
+```{r, echo=FALSE}
+#Simulate Epidemic Dynamics 
+Sim_inoise <- function(beta, n.now, i.now, s.now, r.now, b.now, i.noise) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now, b.now, n.now), nrow=1))
+names(results) <- c("I", "S", "R", "B", "N")
+  while(s.now*i.now >0){
+    i.next <- rnbinom(n=1, mu=(beta*i.now*s.now/n.now)*i.noise, size=i.now) 
+    s.now <- s.now - i.next + b.now
+    r.now <- r.now + i.now
+    b.now <- rgamma(1, shape=2, scale=.000215)*n.now
+    n.now <- n.now + b.now 
+    i.now <- i.next
+    results <- rbind(results, c(i.now, s.now, r.now, b.now, n.now))
+  }
+return(results)
+}
+
+simdata_inoise_low <- Sim_inoise(beta=beta, n.now=n.now, i.now=i.now, s.now=s.now, r.now=r.now, b.now=b.now, i.noise=i.noise.low)
+
+#Pull out Simulation Data and Create Time Vector 
+I <- simdata_inoise_low$I
+B <- simdata_inoise_low$B
+S_sim <- simdata_inoise_low$S
+n <- simdata_inoise_low$N
+R <- simdata_inoise_low$R
+T<- cumsum(rexp(length(I), rate=(1/2.2)))
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+
+#Plot Simulation
+ggplot(simdata_inoise_low, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Simulated Dynamics with Noise in Infected Class, where noise~N(1,.01)")
+
+#Reconstructing Z dynamics 
+cumbirths <- cumsum(B)
+cuminfecteds <- cumsum(I)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cuminfecteds), nrow=length(cuminfecteds)))
+names(cumulativeinfo) <- c("cumbirths", "cuminfecteds")
+
+regression <- lm(cumbirths ~ 1, offset=(cuminfecteds))
+
+Z <- as.vector(resid(regression))
+```
+```{r, include=FALSE}
+#Run Bayes
+data_reconstructed <- list(N=length(I), P=as.integer(n), I=as.integer(I), Z=as.integer(Z), time_added=time_added)
+
+bayes_reconstructed <- stan(model_code = Stan_reconstructed, data=data_reconstructed, iter=500000, chains=4)
+
+#Run Bayes for Simulation
+data_sim <- list(N=length(I), P=as.integer(n), I=as.integer(I), S=as.integer(S_sim), time_added=time_added)
+
+bayes_sim <- stan(model_code = Stan_sim, data=data_sim, iter=500000, chains=4)
+```
+```{r, echo=FALSE}
+#Plot S_reconstructed
+Sbar <- extract(bayes_reconstructed, 'Sbar')
+Sbar <- unlist(Sbar, use.names=FALSE)
+lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+
+S_lower <- lowlim_Sbar + Z
+S_upper <- uplim_Sbar + Z
+
+ggplot(simdata_inoise_low, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_lower, col="S_lower"))+
+  geom_line(aes(y=S_upper, col="S_upper"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Dynamics")
+```
+```{r}
+bayes_sim
+bayes_reconstructed
+```
+
+Adding Noise to the Infected Class:High Noise
+```{r, echo=FALSE}
+simdata_inoise_high <- Sim_inoise(beta=beta, n.now=n.now, i.now=i.now, s.now=s.now, r.now=r.now, b.now=b.now, i.noise=i.noise.high)
+
+#Pull out Simulation Data and Create Time Vector 
+I <- simdata_inoise_high$I
+B <- simdata_inoise_high$B
+S_sim <- simdata_inoise_high$S
+n <- simdata_inoise_high$N
+T<- cumsum(rexp(length(I), rate=(1/2.2)))
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+#Plot Simulation
+ggplot(simdata_inoise_high, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Simulated Dynamics with Noise in Infected Class, where noise~N(1,.05)")
+
+#Reconstructing Z dynamics 
+cumbirths <- cumsum(B)
+cuminfecteds <- cumsum(I)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cuminfecteds), nrow=length(cuminfecteds)))
+names(cumulativeinfo) <- c("cumbirths", "cuminfecteds")
+
+regression <- lm(cumbirths ~ 1, offset=(cuminfecteds))
+
+Z <- as.vector(resid(regression))
+```
+```{r, include=FALSE}
+#Run Bayes
+data_reconstructed <- list(N=length(I), P=as.integer(n), I=as.integer(I), Z=as.integer(Z), time_added=time_added)
+
+bayes_reconstructed <- stan(model_code = Stan_reconstructed, data=data_reconstructed, iter=500000, chains=4)
+
+#Run Bayes for Simulation
+data_sim <- list(N=length(I), P=as.integer(n), I=as.integer(I), S=as.integer(S_sim), time_added=time_added)
+
+bayes_sim <- stan(model_code = Stan_sim, data=data_sim, iter=500000, chains=4)
+```
+```{r, echo=FALSE}
+#Plot S_reconstructed
+Sbar <- extract(bayes_reconstructed, 'Sbar')
+Sbar <- unlist(Sbar, use.names=FALSE)
+lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+
+S_lower <- lowlim_Sbar + Z
+S_upper <- uplim_Sbar + Z
+
+ggplot(simdata_inoise_high, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_lower, col="S_lower"))+
+  geom_line(aes(y=S_upper, col="S_upper"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Dynamics")
+```
+```{r}
+bayes_sim
+bayes_reconstructed
+```
+
+Adding Noise to the Infected Class:Mid Noise
+```{r, echo=FALSE}
+simdata_inoise_mid <- Sim_inoise(beta=beta, n.now=n.now, i.now=i.now, s.now=s.now, r.now=r.now, b.now=b.now, i.noise=i.noise.mid)
+
+#Pull out Simulation Data and Create Time Vector 
+I <- simdata_inoise_mid$I
+B <- simdata_inoise_mid$B
+S_sim <- simdata_inoise_mid$S
+n <- simdata_inoise_mid$N
+T<- cumsum(rexp(length(I), rate=(1/2.2)))
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+#Plot Simulation
+ggplot(simdata_inoise_mid, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Simulated Dynamics with Noise in Infected Class, where noise~N(1,.05)")
+
+#Reconstructing Z dynamics 
+cumbirths <- cumsum(B)
+cuminfecteds <- cumsum(I)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cuminfecteds), nrow=length(cuminfecteds)))
+names(cumulativeinfo) <- c("cumbirths", "cuminfecteds")
+
+regression <- lm(cumbirths ~ 1, offset=(cuminfecteds))
+
+Z <- as.vector(resid(regression))
+```
+```{r, include=FALSE}
+#Run Bayes
+data_reconstructed <- list(N=length(I), P=as.integer(n), I=as.integer(I), Z=as.integer(Z), time_added=time_added)
+
+bayes_reconstructed <- stan(model_code = Stan_reconstructed, data=data_reconstructed, iter=500000, chains=4)
+
+#Run Bayes for Simulation
+data_sim <- list(N=length(I), P=as.integer(n), I=as.integer(I), S=as.integer(S_sim), time_added=time_added)
+
+bayes_sim <- stan(model_code = Stan_sim, data=data_sim, iter=500000, chains=4)
+```
+```{r, echo=FALSE}
+#Plot S_reconstructed
+Sbar <- extract(bayes_reconstructed, 'Sbar')
+Sbar <- unlist(Sbar, use.names=FALSE)
+lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+
+S_lower <- lowlim_Sbar + Z
+S_upper <- uplim_Sbar + Z
+
+ggplot(simdata_inoise_mid, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_lower, col="S_lower"))+
+  geom_line(aes(y=S_upper, col="S_upper"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Dynamics")
+```
+```{r}
+bayes_sim
+bayes_reconstructed
+```
+
+Adding Noise to Both Classes
+```{r, echo=FALSE}
+#Simulate Epidemic Dynamics 
+Sim_noise_full <- function(beta, n.now, i.now, s.now, r.now, b.now, i.noise, s.noise) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now, b.now, n.now), nrow=1))
+names(results) <- c("I", "S", "R", "B", "N")
+  while(s.now*i.now >0){
+    i.next <- rnbinom(n=1, mu=(beta*i.now*s.now/n.now)*i.noise, size=i.now) 
+    s.now <- s.now - i.next + b.now + s.noise
+    r.now <- r.now + i.now
+    b.now <- rgamma(1, shape=2, scale=.000215)*n.now
+    n.now <- n.now + b.now 
+    i.now <- i.next
+    results <- rbind(results, c(i.now, s.now, r.now, b.now, n.now))
+  }
+return(results)
+}
+
+simdata_noise_full <- Sim_noise_full(beta=beta, n.now=n.now, i.now=i.now, s.now=s.now, r.now=r.now, b.now=b.now, i.noise=i.noise.low, s.noise=s.noise.low)
+
+#Pull out Simulation Data and Create Time Vector 
+I <- simdata_noise_full$I
+B <- simdata_noise_full$B
+S_sim <- simdata_noise_full$S
+n <- simdata_noise_full$N
+T<- cumsum(rexp(length(I), rate=(1/2.2)))
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+#Plot Simulation
+ggplot(simdata_noise_full, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Simulated Dynamics with Low Noise in Both Classes")
+
+#Reconstructing Z dynamics 
+cumbirths <- cumsum(B)
+cuminfecteds <- cumsum(I)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cuminfecteds), nrow=length(cuminfecteds)))
+names(cumulativeinfo) <- c("cumbirths", "cuminfecteds")
+
+regression <- lm(cumbirths ~ 1, offset=(cuminfecteds))
+
+Z <- as.vector(resid(regression))
+```
+```{r, include=FALSE}
+#Run Bayes
+data_reconstructed <- list(N=length(I), P=as.integer(n), I=as.integer(I), Z=as.integer(Z), time_added=time_added)
+
+bayes_reconstructed <- stan(model_code = Stan_reconstructed, data=data_reconstructed, iter=500000, chains=4)
+
+#Run Bayes for Simulation
+data_sim <- list(N=length(I), P=as.integer(n), I=as.integer(I), S=as.integer(S_sim), time_added=time_added)
+
+bayes_sim <- stan(model_code = Stan_sim, data=data_sim, iter=500000, chains=4)
+```
+```{r, echo=FALSE}
+#Plot S_reconstructed
+Sbar <- extract(bayes_reconstructed, 'Sbar')
+Sbar <- unlist(Sbar, use.names=FALSE)
+lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+
+S_lower <- lowlim_Sbar + Z
+S_upper <- uplim_Sbar + Z
+
+ggplot(simdata_noise_full, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_lower, col="S_lower"))+
+  geom_line(aes(y=S_upper, col="S_upper"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Dynamics")
+```
+```{r}
+bayes_sim
+bayes_reconstructed
+```
+
+
+

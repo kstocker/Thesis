@@ -1,0 +1,109 @@
+---
+title: "SIRnodemModelOct26"
+author: "Kaitlyn Stocker"
+date: "10/29/2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#load in necessary libraries
+library(deSolve)
+library(ggplot2)
+
+#Code For Foreward Problem:
+SIRsim <- function(parameters=NULL, time=NULL, intitial=NULL, ...){
+  evalODE <- function(parameters=NULL, time=NULL, initial=NULL) {
+    dif_eq <- function(time, initial, parameters) { 
+      with(as.list(c(initial, parameters)), {
+        dS <- - beta * S * I
+        dI <- beta * S * I - gamma * I
+        dR <- gamma * I
+        list(c(dS, dI, dR)) 
+      })
+    }
+    eval <- ode(times=time, func=dif_eq, y=initial, parms=parameters, method="euler", ...)
+    return(eval) 
+  }
+  output <- evalODE(parameters,initial,time)
+  return(list(model=evalODE, pars=parameters, init=intitial, time=time, 
+              results=as.data.frame(output)))
+}
+  
+
+
+#Plot Forward Problem 
+plot_SIR_simulation<- function(output) {
+  ggplot(output$results, aes(time)) + 
+    geom_line(aes(y = S, color = "S")) + 
+    geom_line(aes(y = I, color = "I")) +
+    geom_line(aes(y = R, color = "R")) +
+    ggtitle("SIR Simulation")
+    labs(x="Time (days)", y= "Proportion")
+}
+ 
+    
+# Check to ensure results are valid (S+I+R=1)
+check100 <- function(SIRsim, epsilon) { # checks if S + I + R = 1 +- eps for all rows
+  test = TRUE
+  for (row in (1:nrow(SIRsim))){ # keep test true if all add to 1, false if one row does not
+    if ((SIRsim$S[row] + SIRsim$I[row] + SIRsim$R[row]) > (1 + epsilon)) {
+      test = FALSE
+    }
+    if ((SIRsim$S[row] + SIRsim$I[row] + SIRsim$R[row]) < (1 - epsilon)) {
+      test = FALSE
+    }
+  }
+  return(test)
+}
+check100(SIRsim, .00000001)
+```
+
+
+```{r}
+estimateBeta <- function(data, beta, gamma, initial, time) {
+  j = 0
+  i = 1
+  emptyMatrix = matrix(,nrow=((3/.01)+1),ncol=2) # create empty matrix of the correct size
+  tempVar = beta # set initial beta equal to a temp variable
+  
+  while (beta <= (tempVar + 3)) { # loop through betas until you get to initial beta plus 3
+    SSBeta = 0 # (re)initialize SS to be zero
+    parameters <- c(beta = beta, gamma = gamma) # save new beta as it goes through the loop
+    sim <- SIRsim(parameters,initial,time) # solve the ODE's given that beta
+    for (j in seq(1,nrow(data$results))) { # loop through each t to compute the residuals
+      SSBeta = SSBeta + (sim$results$I[j] - data$results$I[j])^2
+    }
+    emptyMatrix[i,] <- c(beta, SSBeta) # put beta and SSbeta into the matrix
+    i = i + 1 # update row of matrix
+    j = 0 # reset j to be zero
+    beta = beta + .01 # .05 is arbitrary, will probably make it into a parameter of the function so it can be changed easily
+  }
+  colnames(emptyMatrix) <- c("Beta", "SSBeta") # change the col names
+  return(emptyMatrix)
+}
+
+graphBetaEstimates <- function(matrix) { # takes matrix of betas and SSBeta
+  tempDF <- as.data.frame(betaMatrix)
+  ggplot(tempDF, aes(Beta)) + 
+    geom_line(aes(y = SSBeta, color = "SSBeta")) + 
+    labs(x="Beta", y= "SSBeta") +
+    scale_x_continuous(breaks = scales::pretty_breaks(n = 20)) # set x-scale to be something smaller than default
+}
+```
+
+```{r}
+#Forward Problem Output:
+parameters <- c(beta = 1.66, gamma = (1/2.2))
+initial <- c(S = (760/763), I = (3/763), R = 0)
+time <- seq(from = 0, to = 15, by = 0.01)
+
+influenza_example <- SIRsim(parameters, initial, time)
+influenza_example
+plot_SIR_simulation(influenza_example)
+
+```
+

@@ -1,0 +1,83 @@
+```{r}
+library(ggplot2)
+
+SIRsim_stoch <- function(parameters=NULL, time=NULL, intitial=NULL, ...){
+    SIR_eq <- function(parameters, initial, time.steps) {
+      S <- St <- S0
+      I <- It <- I0
+      R <- Rt <- R0
+      for (i in 2:time.steps) {
+       It <- rbinom(1, S[i-1], 1-exp(-beta*I[i-1]/n))
+       St <- S[i-1]-It
+       Rt <- R[i-1] + I[i-1]
+       I[i] <- It
+       S[i] <- St
+       R[i] <- Rt
+     }
+    }
+output <- list(S, I, R)
+df <- as.data.frame(output)
+}
+
+plot_SIR_sim <- function(df){
+  ggplot(df, aes(x=seq(1,time.steps)))+
+    geom_point(aes(y=S, col="S"))+
+    geom_point(aes(y=I, col="I"))+
+    geom_point(aes(y=R, col="R"))+
+    ggtitle("Chain Binomial SIR Simulation")+
+    labs(x="time steps", y="Number of Individuals")
+}
+
+  
+  
+
+```
+
+```{r}
+parameters <- c(beta=1.66, n=763)
+initial <- c(S0=760, I0=3, R0=0)
+time.steps <- 25
+
+influenza <- SIRsim_stoch(parameters=parameters, initial=initial, time.steps=time.steps)
+influenza
+```
+
+
+```{r}
+parameters <- c(beta=1.66, n=763)
+initial <- c(s.now=760, i.now=3, r.now=0)
+time.steps=25
+
+SIRsim <- function(parameters=NULL, inital=NULL, time=NULL, ...){
+    SIR_eq <- function(parameters, initial, time.steps) {
+      
+      results <- as.data.frame(matrix(c(s.now, i.now, r.now), nrow=1))
+      names(results) <- c("Time", "S", "I", "R")
+      
+      for (j in 1:time.steps) {
+       i.next <- rbinom(1, s.now, 1-exp(-beta*i.now/n))
+       s.now <- s.now - i.next
+       r.now <- r.now + i.now
+       i.now <- i.next
+      }
+      results <- rbind(results, c(j, i.now, s.now, r.now))
+      return(results)
+    }
+return(list(model=SIR_eq, pars=parameters, init=initial, time=time.steps, results=results))
+}
+
+test <- SIRsim(parameters=parameters, initial=initial, time=time.steps)
+
+plot_SIR_sim <- function(df){
+  ggplot(df, aes(x=seq(1,time.steps)))+
+    geom_point(aes(y=S, col="S"))+
+    geom_point(aes(y=I, col="I"))+
+    geom_point(aes(y=R, col="R"))+
+    ggtitle("Chain Binomial SIR Simulation")+
+    labs(x="time steps", y="Number of Individuals")
+}
+
+
+```
+
+

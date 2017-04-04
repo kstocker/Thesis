@@ -1,0 +1,333 @@
+---
+title: "Bayesian Inference on the Chain Binomial"
+author: "Kaitlyn Stocker"
+date: "11/29/2016"
+output: html_document
+---
+```{r, include=FALSE}
+library(rstan)
+```
+
+
+###SIR Model### 
+```{r, echo=FALSE}
+# library(rstan)
+# 
+# Sim <- function(beta, n, i.now, s.now, r.now, time.steps) {
+# 
+# results <- as.data.frame(matrix(c(1, i.now, s.now, r.now), nrow=1))
+# names(results) <- c("time", "I", "S", "R")
+# 
+#   for(j in 2:time.steps){
+#     i.next <- rbinom(1, s.now, 1-exp(-beta*i.now/n))
+#     s.now <- s.now - i.next
+#     r.now <- r.now + i.now
+#     i.now <- i.next
+#     results <- rbind(results, c(j, i.now, s.now, r.now))
+#   }
+# return(results)
+# }
+# 
+# i.now <- 3
+# s.now <- 760
+# r.now <- 0
+# time.steps <- 25
+# beta <- 1.66
+# n <- 763
+# 
+# simdata <- Sim(beta=beta, n=n, i.now=i.now, s.now=s.now, r.now=r.now, time.steps)
+# I<- simdata$I
+# S<- simdata$S
+# R<- simdata$R
+# 
+# 
+# data <- list(N=time.steps, I=I, S=S)
+# 
+# SIRstancode <- as.character("
+#                             data {
+# 	int<lower=1> N; // time steps
+# 	int I[N];
+# 	int S[N];
+# }
+# 
+# 
+# parameters {
+# 	real<lower=0, upper=5> beta;
+# }
+# 
+# model {
+# 	//priors
+# 	beta ~ gamma(3,1); 
+# 	//likelihood
+# 	for (n in 2:N)
+# 		I[n] ~ binomial(S[n-1], 1-exp(-beta*I[n-1]/763));
+# }
+# 	
+#                             ")
+# 
+# bayes <- stan(model_code = SIRstancode, data=data, iter=50000, chains=4)
+# bayes
+# 
+# #Plot prior and posterior distributions of beta 
+# beta <- extract(bayes, 'beta')
+# beta <- unlist(beta, use.names=FALSE)
+# plot(density(beta), xlim=c(0,5),
+#      col=grey(0,0.8),
+#      main="Posterior and Prior Distributions of Beta")
+# curve(dgamma(x,3,1),
+#       add=TRUE,
+#       col=2)
+# legend(x="topright", col=c(2, grey(0,0.8)), bty="n", lty=c(1,2), legend=c("Prior", "Posterior"))
+# 
+# # pairs(bayes)
+# # stan_hist(bayes)
+```
+
+
+```{r}
+Sim <- function(beta, n, i.now, s.now, r.now) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now), nrow=1))
+names(results) <- c("I", "S", "R")
+
+  while(s.now*i.now >0){
+    i.next <- rbinom(1, s.now, 1-exp(-beta*i.now/n))
+    s.now <- s.now - i.next
+    r.now <- r.now + i.now
+    i.now <- i.next
+    results <- rbind(results, c(i.now, s.now, r.now))
+  }
+return(results)
+}
+
+
+n <- 76300000
+s.now <- 76299990
+i.now <- n-s.now
+r.now <- 0
+beta <- 1.66
+
+
+simdata <- Sim(beta=beta, n=n, i.now=i.now, s.now=s.now, r.now=r.now)
+I<- simdata$I
+S<- simdata$S
+R<- simdata$R
+T<- cumsum(rexp(length(I), rate=(1/2.2)))
+
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+data <- list(N=length(I), P=n, I=I, S=S, time_added=time_added) 
+
+#Plot simulation 
+ggplot(simdata, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "Chain Binomial Simulation with Random Gamma")
+
+#Bayes Inference
+SIRstancode <- as.character("
+                            data {
+	int<lower=1> N; // time steps
+  int<lower=1> P; //population size
+  real time_added[N];
+	int <lower=0> I[N];
+	int <lower=0> S[N];
+}
+
+
+parameters {
+	real<lower=0, upper=5> beta;
+  real<lower=0, upper=5> gamma;
+
+}
+
+model {
+	//priors
+	beta ~ gamma(3, 1); 
+  gamma ~ gamma(2,1);
+	//likelihood
+	for (n in 2:N)
+		I[n] ~ binomial(S[n-1], 1-exp(-beta*I[n-1]/P));
+  time_added[N]~exponential_log(gamma);
+}
+	
+                            ")
+
+
+bayes <- stan(model_code = SIRstancode, data=data, iter=500000, chains=4)
+bayes
+
+pairs(bayes)
+stan_hist(bayes)
+
+beta <- extract(bayes, 'beta')
+beta <- unlist(beta, use.names=FALSE)
+dbeta<- density(beta)
+minbeta <- min(dbeta$y)
+maxbeta <- max(dbeta$y)
+dbeta$y <- (dbeta$y - minbeta)/(maxbeta-minbeta) #normalize beta
+
+
+gamma <- extract(bayes, 'gamma')
+gamma <- unlist(gamma, use.names=FALSE)
+dgamma <- density(gamma)
+mingamma<-min(dgamma$y)
+maxgamma <- max(dgamma$y)
+dgamma$y <- (dgamma$y -mingamma)/(maxgamma-mingamma)#normalize gamma
+
+
+
+plot(dbeta, xlim=c(0,5),
+     col=grey(0,0.8),
+     main="Posterior and Prior Distributions of Beta")
+curve(dgamma(x,3,1),
+      add=TRUE,
+      col=2)
+legend(x="topright", col=c(2, grey(0,0.8)), bty="n", lty=c(1,2), legend=c("Prior", "Posterior"))
+
+
+plot(dgamma, xlim=c(0,5),
+     col=grey(0,0.8),
+     main="Posterior and Prior Distributions of Gamma")
+curve(dgamma(x,2,1),
+      add=TRUE,
+      col=2)
+legend(x="top", col=c(2, grey(0,0.8)), bty="n", lty=c(1,2), legend=c("Prior", "Posterior"))
+
+
+```
+
+###Exponential Distribution###
+```{r, echo=FALSE}
+# lambda <- 1.2
+# X <- rexp(1000, lambda)
+# N <- length(X)
+# 
+# stancode <- as.character("data {
+# 	int<lower=1>  N; //number of points
+# 	vector[N]  X;// data points 
+# }
+# 
+# parameters {
+# 	real <lower=0> lambda;
+# }
+# 
+# model {
+# 	real alpha;
+# 	real beta;
+# 	alpha=1.0;
+# 	beta=1.0;
+# 	lambda ~ gamma(alpha,beta);
+# 	X~exponential(lambda);
+# }")
+# 
+# fit <- stan(model_code=stancode, data=list(X, N), warmup= 750, iter=1500, chains=3)
+# 
+# fit
+# pairs(fit)
+# stan_hist(fit)
+
+
+```
+
+
+###Linear Models###
+```{r, echo=FALSE}
+# #Simulate
+# n <- 1000
+# x <- rnorm(n, mean=2, sd=1)
+# beta2 <- 3.5
+# beta1 <- 1
+# Y <- beta1 + (beta2 %*% x) + rnorm(n, mean=0, sd=1.5)
+# 
+# data <- list(N=n, X=x, Y=as.vector(Y))
+# 
+# #Check Linear Regression
+# lm(Y~x)
+# 
+# #Stan Code
+# linearstancode <- as.character("
+# data {
+# int<lower=1> N;
+# vector[N] X;
+# row_vector[N] Y;
+# }
+# 
+# parameters {
+# real beta1;
+# real beta2;
+# real sigma;
+# }
+# 
+# model {
+# //likelihood
+# vector[N] mu;
+# mu = beta1 + X*beta2;
+# Y~normal(mu, sigma);
+# 
+# //priors
+# beta1~normal(0,10);
+# beta2~normal(0,10);
+# sigma~cauchy(0,5);
+# }                          ")
+# 
+# linbayesfit <- stan(model_code=linearstancode, data=data, iter=1500, chains=4)
+# 
+# linbayesfit
+# pairs(linbayesfit)
+# stan_hist(linbayesfit)
+```
+
+```{r, echo=FALSE}
+# #Simulate Data
+# n <- 1000
+# x <- replicate(3, rnorm(n))
+# #X <- replicate(3, x)
+# beta <- c(3.5, 5.6, -8)
+# k <- length(beta)
+# intercept <- 1
+# Y <- intercept + (x %*% beta) + rnorm(n, mean=0, sd=1.5)
+# 
+# data <- list(N=n, X=x, K=k, Y=as.vector(Y))
+# 
+# #Check Linear Regression
+# lm(Y~x)
+# 
+# #Stan Code and Inference 
+# linearstancode2 <- as.character("
+# data {
+# int<lower=1> N;
+# int<lower=1> K;
+# matrix[N,K] X;
+# vector[N] Y;
+# }
+# 
+# parameters {
+# vector[K] beta;
+# real intercept;
+# real <lower=0> sigma;
+# }
+# 
+# model {
+# //likelihood
+# vector[N] mu;
+# mu = intercept + X*beta;
+# Y~normal(mu, sigma);
+# 
+# //priors
+# beta~normal(0,10);
+# intercept~normal(0,10);
+# sigma~cauchy(0,5);
+# }                          ")
+# 
+# linearbayesfit <- stan(model_code=linearstancode2, data=data, iter=1500, chains=5)
+# 
+# linearbayesfit
+# pairs(linearbayesfit)
+# stan_hist(linearbayesfit)
+```
+

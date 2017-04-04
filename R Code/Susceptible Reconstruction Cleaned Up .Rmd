@@ -1,0 +1,135 @@
+---
+title: "Susceptible Reconstruction"
+author: "Kaitlyn Stocker"
+date: "2/15/2017"
+output: html_document
+---
+```{r}
+library(rstan)
+```
+
+
+```{r}
+#Initial Conditions
+n.now <- 763000
+s.now <- 762990
+i.now <- n.now-s.now
+r.now <- 0
+beta <- 1.66
+birthrate <- rgamma(1, shape=2, scale=.000215)
+b.now <- 0
+
+#Stan Code
+Stan_z <- as.character("
+data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+  real time_added[N];
+	int <lower=0> I[N]; // infecteds 
+	int  Z[N]; // Zt 
+}
+
+parameters {
+  real <lower=P[1]/100, upper= P[N]> Sbar;
+	real<lower=0, upper=5> beta;
+  real<lower=0, upper=5> gamma;
+}
+
+model {
+	//priors
+  Sbar ~ normal(P[1]/2, P[1]/10);
+	beta ~ gamma(3, 1);
+  gamma ~ gamma(2,1);
+
+	//likelihood
+	for (n in 2:N){
+		I[n] ~ neg_binomial_2(beta*I[n-1]*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+    time_added[n]~exponential_log(gamma);
+  }
+}    ")
+```
+
+
+
+```{r}
+#Simulation Function of TSIR Model 
+Sim <- function(beta, n.now, i.now, s.now, r.now, b.now) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now, b.now, n.now), nrow=1))
+names(results) <- c("I", "S", "R", "B", "N")
+  while(s.now*i.now >0){
+    i.next <- rnbinom(n=1, mu=beta*i.now*s.now/n.now, size=i.now)
+    b.now <- rgamma(1, shape=2, scale=.000215)*n.now
+    s.now <- s.now - i.next + b.now
+    r.now <- r.now + i.now
+    n.now <- n.now + b.now 
+    i.now <- i.next
+    results <- rbind(results, c(i.now, s.now, r.now, b.now, n.now))
+  }
+return(results)
+}
+
+
+#Run Simulation
+simdata <- Sim(beta=beta, n.now=n.now, i.now=i.now, s.now=s.now, r.now=r.now, b.now=b.now)
+
+#Pull Out Simulation Data and Create Time Vector
+I <- simdata$I
+S_sim <- simdata$S
+n <- simdata$N
+T <- cumsum(rexp(length(simdata$I), rate=(1/2.2)))
+
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+```
+
+```{r}
+#Reconstructing Z dynamics 
+cumbirths <- cumsum(simdata$B)
+cuminfecteds <- cumsum(simdata$I)
+cumulativeinfo <- as.data.frame(matrix(c(cumbirths, cuminfecteds), nrow=length(cuminfecteds)))
+names(cumulativeinfo) <- c("cumbirths", "cuminfecteds")
+
+regression <- lm(cumbirths ~ 1, offset=(cuminfecteds)) #note: for forcing slopes other than 1, try using nls
+
+regression_test <- lm(cumbirths ~ cuminfecteds)
+
+Z <- as.vector(resid(regression))
+
+ggplot(simdata, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=Z, col="Z"))+
+  labs(x="Time", y="Number of Susceptibles", title="Reconstructed Dynamics")
+
+```
+
+```{r}
+#Run Bayes on Reconstructed Data 
+data_z <- list(N=length(I), P=as.integer(n), I=as.integer(I), Z=as.integer(Z), time_added=time_added)
+
+bayes_reconstructed <- stan(model_code = Stan_z, data=data_z, iter=500000, chains=4)
+
+bayes_reconstructed
+
+```
+
+```{r}
+#Check out Reconstructed Susceptibles
+Sbar <- extract(bayes_reconstructed, 'Sbar')
+Sbar <- unlist(Sbar, use.names=FALSE)
+lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+
+S_lower <- lowlim_Sbar + Z
+S_upper <- uplim_Sbar + Z
+
+ggplot(simdata, aes(x=T))+
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=S_lower, col="S_lower"))+
+  geom_line(aes(y=S_upper, col="S_upper"))+
+  labs(x="time", y="Number of Susceptibles", title="Reconstructed vs. Simulated Susceptible Dynamics")
+```
+

@@ -1,0 +1,429 @@
+---
+title: "TSIR Model"
+author: "Kaitlyn Stocker"
+date: "12/4/2016"
+output: html_document
+---
+###Simulating from TSIR Model
+```{r}
+library(rstan)
+
+Sim <- function(beta, n, i.now, s.now, r.now, time.steps) {
+
+results <- as.data.frame(matrix(c(1, i.now, s.now, r.now), nrow=1))
+names(results) <- c("time", "I", "S", "R")
+
+  for(j in 2:time.steps){
+    i.next <- rnbinom(n=1, mu=beta*i.now*s.now/n, size=i.now)
+    s.now <- s.now - i.next
+    r.now <- r.now + i.now
+    i.now <- i.next
+    results <- rbind(results, c(j, i.now, s.now, r.now))
+  }
+return(results)
+}
+
+i.now <- 3
+s.now <- 760
+r.now <- 0
+time.steps <- 25
+beta <- 1.66
+n <- 763
+
+simdata <- Sim(beta=beta, n=n, i.now=i.now, s.now=s.now, r.now=r.now, time.steps)
+I<- na.omit(simdata$I)
+S<- na.omit(simdata$S)
+R<- na.omit(simdata$R)
+data <- list(N=length(I), P=n, I=I, S=S)
+
+ggplot(simdata, aes(x=seq(1, time.steps))) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "TSIR Simulation")
+```
+
+###Inference on TSIR Model
+```{r}
+
+
+SIRstancode <- as.character("
+                            data {
+	int<lower=1> N; // time steps
+  int<lower=1> P; //population size
+	int I[N];
+	int S[N];
+}
+
+
+parameters {
+	real<lower=0> beta;
+}
+
+model {
+	//priors
+	beta ~ gamma(3, 1); 
+	//likelihood
+	for (n in 2:N)
+		I[n] ~ neg_binomial_2(beta*I[n-1]*S[n-1]/P, I[n-1]);
+}
+	
+                            ")
+
+bayes <- stan(model_code = SIRstancode, data=data, iter=500000, chains=4)
+bayes
+pairs(bayes)
+stan_hist(bayes)
+```
+
+###Introduce Random Gamma
+```{r}
+Sim <- function(beta, n, i.now, s.now, r.now, time.steps) {
+
+results <- as.data.frame(matrix(c(0, i.now, s.now, r.now), nrow=1))
+names(results) <- c("time", "I", "S", "R")
+
+  for(j in cumsum(rexp(time.steps, rate=(1/2.2)))){
+    if (i.now*s.now == 0) {break}
+    else {
+    i.next <- rnbinom(n=1, mu=beta*i.now*s.now/n, size=i.now)
+    s.now <- s.now - i.next
+    r.now <- r.now + i.now
+    i.now <- i.next
+    results <- rbind(results, c(j, i.now, s.now, r.now))}
+  }
+return(results)
+}
+
+
+i.now <- 3
+s.now <- 760
+r.now <- 0
+time.steps <- 50
+beta <- 1.66
+n <- 763
+
+simdata <- Sim(beta=beta, n=n, i.now=i.now, s.now=s.now, r.now=r.now, time.steps)
+I<- na.omit(simdata$I)
+S<- na.omit(simdata$S)
+R<- na.omit(simdata$R)
+T<- na.omit(simdata$time)
+
+time_added<-0
+for(i in seq(2, (length(T)))){
+  time_added[i] <- T[i+1] - T[i]
+}
+
+data <- list(N=length(I), P=n, I=I, S=S, time_added=time_added)
+
+
+ggplot(simdata, aes(x=time)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "TSIR Simulation")
+
+SIRstancode <- as.character("
+                            data {
+	int<lower=1> N; // time steps
+  int<lower=1> P; //population size
+  real time_added[N];
+	int I[N];
+	int S[N];
+}
+
+
+parameters {
+	real<lower=0, upper=5> beta;
+  real<lower=0, upper=5> gamma;
+
+}
+
+model {
+	//priors
+	beta ~ gamma(3, 1); 
+  gamma ~ gamma(2,1);
+	//likelihood
+	for (n in 2:N)
+		I[n] ~ neg_binomial_2(beta*I[n-1]*S[n-1]/P, I[n-1]);
+  for (n in 2:N)
+  time_added[n]~exponential_log(gamma);
+}
+	
+                            ")
+
+bayes <- stan(model_code = SIRstancode, data=data, iter=500000, chains=4, init=c(beta = 1, gamma = 2))
+bayes
+# pairs(bayes)
+stan_hist(bayes)
+
+
+#Plot prior and posterior distributions of beta 
+beta <- extract(bayes, 'beta')
+beta <- unlist(beta, use.names=FALSE)
+dbeta<- density(beta)
+minbeta <- min(dbeta$y)
+maxbeta <- max(dbeta$y)
+dbeta$y <- (dbeta$y - minbeta)/(maxbeta-minbeta) #normalize beta
+
+
+gamma <- extract(bayes, 'gamma')
+gamma <- unlist(gamma, use.names=FALSE)
+dgamma <- density(gamma)
+mingamma<-min(dgamma$y)
+maxgamma <- max(dgamma$y)
+dgamma$y <- (dgamma$y -mingamma)/(maxgamma-mingamma)#normalize gamma
+
+
+
+plot(dbeta, xlim=c(0,5),
+     col=grey(0,0.8),
+     main="Posterior and Prior Distributions of Beta")
+curve(dgamma(x,3,1),
+      add=TRUE,
+      col=2)
+legend(x="topright", col=c(2, grey(0,0.8)), bty="n", lty=c(1,2), legend=c("Prior", "Posterior"))
+
+
+plot(dgamma, xlim=c(0,5),
+     col=grey(0,0.8),
+     main="Posterior and Prior Distributions of Gamma")
+curve(dgamma(x,2,1),
+      add=TRUE,
+      col=2)
+legend(x="top", col=c(2, grey(0,0.8)), bty="n", lty=c(1,2), legend=c("Prior", "Posterior"))
+
+```
+
+
+###Modify Simulation for Better Estimation of Gamma
+```{r}
+Sim <- function(beta, n, i.now, s.now, r.now) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now), nrow=1))
+names(results) <- c("I", "S", "R")
+  while(s.now*i.now >0){
+    i.next <- rnbinom(n=1, mu=beta*i.now*s.now/n, size=i.now)
+    s.now <- s.now - i.next
+    r.now <- r.now + i.now
+    i.now <- i.next
+    results <- rbind(results, c(i.now, s.now, r.now))
+  }
+return(results)
+}
+
+n <- 76300000
+s.now <- 76299000
+i.now <- n-s.now
+r.now <- 0
+beta <- 1.66
+
+
+simdata <- Sim(beta=beta, n=n, i.now=i.now, s.now=s.now, r.now=r.now)
+I<- simdata$I
+S<- simdata$S
+R<- simdata$R
+T<- cumsum(rexp(length(I), rate=(1/2.2)))
+
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+data <- list(N=length(I), P=n, I=I, S=S, time_added=time_added)
+
+
+ggplot(simdata, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "TSIR Simulation")
+
+SIRstancode <- as.character("
+                            data {
+	int<lower=1> N; // time steps
+  real<lower=1> P; //population size
+  real time_added[N];
+	int <lower=0> I[N];
+	int <lower=0> S[N];
+}
+
+
+parameters {
+	real<lower=0, upper=5> beta;
+  real<lower=0, upper=5> gamma;
+
+}
+
+model {
+	//priors
+	beta ~ gamma(3, 1); 
+  gamma ~ gamma(2,1);
+	//likelihood
+	for (n in 2:N){
+		I[n] ~ neg_binomial_2(beta*I[n-1]*S[n-1]/P, I[n-1]);
+    time_added[n]~exponential_log(gamma);
+  }
+}
+	
+                            ")
+
+bayes <- stan(model_code = SIRstancode, data=data, iter=500000, chains=4)
+bayes
+pairs(bayes)
+stan_hist(bayes)
+
+#Plot prior and posterior distributions of beta 
+beta <- extract(bayes, 'beta')
+beta <- unlist(beta, use.names=FALSE)
+dbeta<- density(beta)
+minbeta <- min(dbeta$y)
+maxbeta <- max(dbeta$y)
+dbeta$y <- (dbeta$y - minbeta)/(maxbeta-minbeta) #normalize beta
+
+
+gamma <- extract(bayes, 'gamma')
+gamma <- unlist(gamma, use.names=FALSE)
+dgamma <- density(gamma)
+mingamma<-min(dgamma$y)
+maxgamma <- max(dgamma$y)
+dgamma$y <- (dgamma$y -mingamma)/(maxgamma-mingamma)#normalize gamma
+
+
+
+plot(dbeta, xlim=c(0,5),
+     col=grey(0,0.8),
+     main="Posterior and Prior Distributions of Beta")
+curve(dgamma(x,3,1),
+      add=TRUE,
+      col=2)
+legend(x="topright", col=c(2, grey(0,0.8)), bty="n", lty=c(1,2), legend=c("Prior", "Posterior"))
+
+
+plot(dgamma, xlim=c(0,5),
+     col=grey(0,0.8),
+     main="Posterior and Prior Distributions of Gamma")
+curve(dgamma(x,2,1),
+      add=TRUE,
+      col=2)
+legend(x="top", col=c(2, grey(0,0.8)), bty="n", lty=c(1,2), legend=c("Prior", "Posterior"))
+```
+
+
+###Checking out Altered Priors 
+```{r}
+
+#n=7630000000, gamma=1
+Sim <- function(beta, n, i.now, s.now, r.now) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now), nrow=1))
+names(results) <- c("I", "S", "R")
+  while(s.now*i.now >0){
+    i.next <- rnbinom(n=1, mu=beta*i.now*s.now/n, size=i.now)
+    s.now <- s.now - i.next
+    r.now <- r.now + i.now
+    i.now <- i.next
+    results <- rbind(results, c(i.now, s.now, r.now))
+  }
+return(results)
+}
+
+#Parms and initials 
+n <- 76300000
+s.now <- 76299990
+i.now <- n-s.now
+r.now <- 0
+beta <- 1.66
+
+#run simulation, ready data for rstan 
+simdata <- Sim(beta=beta, n=n, i.now=i.now, s.now=s.now, r.now=r.now)
+I<- simdata$I
+S<- simdata$S
+R<- simdata$R
+T<- cumsum(rexp(length(I), rate=1))
+
+time_added<-0
+for(i in 2:(length(T))){
+  time_added[i] <- T[i] - T[i-1]
+}
+
+data <- list(N=length(I), P=n, I=I, S=S, time_added=time_added)
+
+#plot simulation
+ggplot(simdata, aes(x=T)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  labs(x="Time Steps", y = "Number of Individuals", title = "TSIR Simulation")
+
+#Run Bayesian inference 
+SIRstancode <- as.character("
+                            data {
+	int<lower=1> N; // time steps
+  real<lower=1> P; //population size
+  real time_added[N];
+	int <lower=0> I[N];
+	int <lower=0> S[N];
+}
+
+
+parameters {
+	real<lower=0, upper=5> beta;
+  real<lower=0, upper=5> gamma;
+
+}
+
+model {
+	//priors
+	beta ~ gamma(3, 1); 
+  gamma ~ gamma(2,1);
+	//likelihood
+	for (n in 2:N){
+		I[n] ~ neg_binomial_2(beta*I[n-1]*S[n-1]/P, I[n-1]);
+    time_added[n]~exponential_log(gamma);
+  }
+}
+	
+                            ")
+
+bayes <- stan(model_code = SIRstancode, data=data, iter=500000, chains=4)
+bayes
+pairs(bayes)
+stan_hist(bayes)
+
+#Plot prior and posterior distributions of beta 
+beta <- extract(bayes, 'beta')
+beta <- unlist(beta, use.names=FALSE)
+dbeta<- density(beta)
+minbeta <- min(dbeta$y)
+maxbeta <- max(dbeta$y)
+dbeta$y <- (dbeta$y - minbeta)/(maxbeta-minbeta) #normalize beta
+
+
+gamma <- extract(bayes, 'gamma')
+gamma <- unlist(gamma, use.names=FALSE)
+dgamma <- density(gamma)
+mingamma<-min(dgamma$y)
+maxgamma <- max(dgamma$y)
+dgamma$y <- (dgamma$y -mingamma)/(maxgamma-mingamma)#normalize gamma
+
+
+
+plot(dbeta, xlim=c(0,5),
+     col=grey(0,0.8),
+     main="Posterior and Prior Distributions of Beta")
+curve(dgamma(x,3,1),
+      add=TRUE,
+      col=2)
+legend(x="topright", col=c(2, grey(0,0.8)), bty="n", lty=c(1,2), legend=c("Prior", "Posterior"))
+
+
+plot(dgamma, xlim=c(0,5),
+     col=grey(0,0.8),
+     main="Posterior and Prior Distributions of Gamma")
+curve(dgamma(x,2,1),
+      add=TRUE,
+      col=2)
+legend(x="top", col=c(2, grey(0,0.8)), bty="n", lty=c(1,2), legend=c("Prior", "Posterior"))
+```
+
