@@ -17,8 +17,9 @@ results <- as.data.frame(matrix(c(i.now, s.now, r.now), nrow=1))
 names(results) <- c("I", "S", "R")
   for(i in 1:545){
     if(s.now*i.now >0){
+      if(i%%26 == 0){
     n.now <- pop[i]
-    i.next <- beta[i]*(i.now^.975)*s.now/n.now
+    i.next <- beta[26]*(i.now^.975)*s.now/n.now
     #i.next <- rnbinom(n=1, mu=beta[i]*(i.now^.975)*s.now/n.now, size=i.now) 
     b.now <- births[i]
     s.now <- s.now - i.next + b.now
@@ -26,6 +27,18 @@ names(results) <- c("I", "S", "R")
     i.now <- i.next
     #cases <- i.now/rho[i]
     results <- rbind(results, c(i.now, s.now, r.now))
+      }
+      else{
+        n.now <- pop[i]
+    i.next <- beta[i%%26]*(i.now^.975)*s.now/n.now
+    #i.next <- rnbinom(n=1, mu=beta[i]*(i.now^.975)*s.now/n.now, size=i.now) 
+    b.now <- births[i]
+    s.now <- s.now - i.next + b.now
+    r.now <- r.now + i.now
+    i.now <- i.next
+    #cases <- i.now/rho[i]
+    results <- rbind(results, c(i.now, s.now, r.now))
+      }
     }
     else {break}
   }
@@ -258,7 +271,7 @@ for(i in 1:length(t)){
 rm(t)
 
   
-simdata <- Sim(beta=ny_betas_rep, pop=newyork$pop, i.now=i.now, s.now=s.now, r.now=r.now, births=newyork$rec)
+simdata <- Sim(beta=ny_betas, pop=newyork$pop, i.now=i.now, s.now=s.now, r.now=r.now, births=newyork$rec)
 
 #Pull out Simulation Data and Create Time Vector 
 I <- simdata$I

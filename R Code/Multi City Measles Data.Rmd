@@ -142,31 +142,42 @@ linear_reconstruction <- function(city){
 }
 
 local_regression <- function(city, scale){
+  cumbirths <- cumsum(city$rec)
+  cumcases <- as.numeric(cumsum(city$cases))
+  
   gaus_regression_S <- gaussian_regression(city=city, scale=scale)
   gaus_regression_I <- gaussian_regression(city=city, scale=scale)
 
-  Z_gaus <- cumbirths - gaus_regression_S$y.fit.gaus
-  I_gaus <- C*gaus_regression_I$x.coeffs.gaus.smooth
+  city$Z_gaus <- cumbirths - gaus_regression_S$y.fit.gaus
+  city$I_gaus <- city$cases*gaus_regression_I$x.coeffs.gaus
   
-  Z_linear <- linear_reconstruction(city)
+  city$Z_linear <- linear_reconstruction(city)[[3]]
+  city$rho <- gaus_regression_I$x.coeffs.gaus
   
-  SR_plot <- ggplot(city, aes(x=number))+
+  return(city)
+}
+
+SR_plot <- function(city){
+    ggplot(city, aes(x=number))+
               geom_line(aes(y=Z_gaus, col="Local Regression Estimate of Z")) +
-              geom_line(aes(y=Z_linear, col="Linear Regression Estimate of Z")) +
+              geom_line(aes(y=Z_linear, col="Linear Regression Estimate of Z"))+
               labs(x="Biweek", y="Z", title="Comparing Reconstruction Methods")
 
-  IR_plot <- ggplot(city, aes(x=number)) +
+}
+
+
+IR_plot <- function(city){
+  ggplot(city, aes(x=number)) +
               geom_line(aes(y=cases, col="Reported Cases")) +
               geom_line(aes(y=I_gaus, col="Estimate of true infecteds"))+
               labs(x="Biweek", y="Infecteds/Cases", title="Reconstructed Infecteds vs Reported 
                    Cases")
+}
 
-  rho_plot <- ggplot(city, aes(x=number)) +
-                geom_line(aes(y=gaus_regression_I$x.coeffs.gaus.smooth, col="rho"))+
+rho_plot <- function(city){
+  ggplot(city, aes(x=number)) +
+                geom_line(aes(y=rho, col="rho"))+
                 labs(x="biweek", y="estimated rho", title="Time Varying Reporting Rate Plot")
-  
-  return(list(Z_gaus=Z_gaus, I_gaus=I_gaus, SR_plot=SR_plot, IR_plot=IR_plot, 
-              rho_plot=rho_plot))
 }
 
 optim_bandwidth <- function(city){
@@ -194,12 +205,15 @@ optim_bandwidth <- function(city){
   return(scale_optim_gaus)
 }
 
-bayes_data <- function(city, reconstruction){
-  return(list(N=length(city$number), P=as.integer(city$pop), I=as.integer(reconstruction[[2]]),
-              Z=as.integer(reconstruction[[1]])))
+bayes_data <- function(city){
+  return(list(N=length(city$number), P=as.integer(city$pop), I=as.integer(city$I_gaus),
+              Z=as.integer(city$Z_gaus)))
 }
 
-run_bayes <- function(data){
+run_bayes <- function(city){
+  data <- list(N=length(city$number), P=as.integer(city$pop), I=as.integer(city$I_gaus),
+              Z=as.integer(city$Z_gaus))
+  
   Stan_z <- as.character("
 data {
 	int<lower=1> N; // time steps
@@ -309,23 +323,25 @@ rm(measles_betas)
 ```
 
 ```{r Susceptible Reconstruction, echo=FALSE}
-#Linear Reconstruction-Boston
-Z_linear_boston <- linear_reconstruction(boston)
-
-ggplot(newyork, aes(x=number)) +
-    geom_line(aes(y=Z_linear_boston)) +
-    labs(x="biweek", y="Z-linear reconstruction", title="Boston: Linear Reconstruction of 
-         Susceptible Dynamics")
-
-#Local Regression: Choose Bandwidth
+#Boston Reconstruction 
 scale_optim_boston <- optim_bandwidth(boston)
 
-#Local Regression: Complete Reconstruction
-boston_reconstruction <- local_regression(boston, scale_optim_boston)
+boston <- local_regression(boston, scale_optim_boston)
 
-boston_reconstruction$SR_plot
-boston_reconstruction$IR_plot
-boston_reconstruction$rho_plot
+SR_plot(boston)
+IR_plot(boston)
+rho_plot(boston)
+
+#New York Reconstruction
+start <- Sys.time()
+scale_optim_ny <- optim_bandwidth(newyork)
+
+newyork <- local_regression(newyork, scale_optim_ny)
+
+SR_plot(newyork)
+IR_plot(newyork)
+rho_plot(newyork)
+Sys.time() - start
 ```
 
 ```{r Bayes Inference, include=FALSE}
@@ -470,9 +486,20 @@ model {
 		I[n] ~ neg_binomial_2(beta[n%26-1]*(I[n-1]^.975)*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
 	}
 }    ") 
+
+bayes_z <- stan(model_code = Stan_z_mod, data=boston_data, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
 ```
 
+To do (4/4/17):
+- test modulo in simulation and stan code
+- make and test general function to run all cities in one go
+  - make a list of all city data so you can generalize pulling in and calling cities
+- write one page summary of my SR with seasonal rho's 
+- undo smoothing on rho 
+
+
 ```{r}
+#meeting notes 3/30
 # I have their betas, I know what model - don't know what rho's they fit 
 # can I reverse engineer to figure out rho's?? 
 #one page summary I can write up on local regression to get rho's (Dr haran can ask Matt Ferrari) -- in particular, roughly speaking 1 pg, methodology used in order to get the rho's I get. Add some lil graphs. SEND WITHIN A WEEK 
