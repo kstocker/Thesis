@@ -33,6 +33,23 @@ names(results) <- c("I", "S", "R")
 return(results)
 }
 
+read_in_city <- function(city){
+
+  df <- measles %>%
+  filter(year>1919 & year <1941) %>%
+  filter(loc == city) %>%
+  select(biweek, year, cases, pop, rec) %>%
+  mutate(number = seq(1, 546, 1))
+  
+  betas <- measles_betas %>%
+  filter(city == city) %>%
+  select(contains("biweek"))
+  
+  betas <- unname(unlist(betas[1,]))
+  
+  return(list(df=df, betas=betas))
+} #function for reading in city, pass city as character
+
 gaussian_kernel <- function(x) {
   (1/sqrt(2*pi))*exp(-x^2/2)
 }
@@ -210,7 +227,7 @@ bayes_data <- function(city){
               Z=as.integer(city$Z_gaus), Zmin=as.integer(abs(min(city$Z_gaus)))))
 }
 
-run_bayes <- function(city){
+run_bayes <- function(city, which_stan){
   data <- list(N=length(city$number), P=as.integer(city$pop), I=as.integer(city$I_gaus),
               Z=as.integer(city$Z_gaus), Zmin=as.integer(abs(min(city$Z_gaus))))
   
@@ -264,8 +281,15 @@ model {
   }
 }    ") 
 
+if(which_stan == "low_pop"){
 bayes_z <- stan(model_code = Stan_z_mod_low_pop, data=data, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
+}
 
+if(which_stan == "high_pop"){
+  bayes_z <- stan(model_code = Stan_z_mod, data=data, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
+}
+
+else{bayes_z <- "error: which_stan"}
 return(bayes_z)
 }
 
@@ -357,7 +381,7 @@ IR_plot(newyork)
 rho_plot(newyork)
 
 bayes_data_ny <- bayes_data(newyork)
-ny_bayes <- run_bayes(bayes_data_ny)
+ny_bayes <- run_bayes(newyork, which_stan = "high_pop")
 ```
 
 ```{r Bayes Inference, include=FALSE}
@@ -399,22 +423,7 @@ tail(pop)
 
 ```{r}
 #Function for reading in all cities:
-read_in_city <- function(city){
 
-  df <- measles %>%
-  filter(year>1919 & year <1941) %>%
-  filter(loc == city) %>%
-  select(biweek, year, cases, pop, rec) %>%
-  mutate(number = seq(1, 546, 1))
-  
-  betas <- measles_betas %>%
-  filter(city == city) %>%
-  select(contains("biweek"))
-  
-  betas <- unname(unlist(betas[1,]))
-  
-  return(list(df=df, betas=betas))
-}
 
 chicago <- read_in_city("CHICAGO")[[1]]
 chicago_betas <- read_in_city("CHICAGO")[[2]]
