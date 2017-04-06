@@ -41,6 +41,12 @@ read_in_city <- function(city){
   select(biweek, year, cases, pop, rec) %>%
   mutate(number = seq(1, 546, 1))
   
+  for(i in 1:nrow(df)){
+    if(is.na(df$cases[i])==TRUE){
+      df$cases[i] <- (df$cases[i-1]+df$cases[i+1])/2
+    }
+  }
+  
   betas <- measles_betas %>%
   filter(city == city) %>%
   select(contains("biweek"))
@@ -204,7 +210,7 @@ optim_bandwidth <- function(city){
   h<- seq(0.05, 0.89, 0.01)
   SSE1_gaus <- c()
   for(i in seq_along(h)){
-    if(SSE(y=cumbirths, y_hat=gaussian_regression(city=boston, scale=h[i])[[1]]))
+    if(SSE(y=cumbirths, y_hat=gaussian_regression(city=city, scale=h[i])[[1]]))
     SSE1_gaus[i] <- SSE(y=cumbirths, y_hat=gaussian_regression(city=city, scale=h[i])[[1]])
   }
 
@@ -392,17 +398,20 @@ rho_plot(newyork)
 
 ny_bayes <- run_bayes(newyork, which_stan = "high_pop")
 
-#Chicago Reconstruction (8.67348 mins run time)
+#Chicago Reconstruction: Doesn't work because of a single NA
 chicago <- read_in_city("CHICAGO")[[1]]
 chicago_betas <- read_in_city("CHICAGO")[[2]]
 
-scale_optim_chicago <- optim_bandwidth(chicago)
+#scale_optim_chicago <- optim_bandwidth(chicago)
+scale_optim_chicago <- 0.89 
 
-chicago <- local_regression(chicago, scale_optim_ny)
+chicago <- local_regression(chicago, scale_optim_chicago)
 
 SR_plot(chicago)
 IR_plot(chicago)
 rho_plot(chicago)
+
+chicago_bayes <- run_bayes(chicago, which_stan = "high_pop")
 
 #Philadelphia
 phil <- read_in_city("PHILADELPHIA")[[1]]
@@ -410,11 +419,14 @@ phil_betas <- read_in_city("PHILADELPHIA")[[2]]
 
 scale_optim_phil <- optim_bandwidth(phil)
 
-phil <- local_regression(phil, scale_optim_ny)
+phil <- local_regression(phil, scale_optim_phil)
 
-SR_plot(chicago)
-IR_plot(chicago)
-rho_plot(chicago)
+SR_plot(phil)
+IR_plot(phil)
+rho_plot(phil)
+
+#Spokane
+
 
 ```
 
