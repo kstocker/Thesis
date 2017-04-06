@@ -408,9 +408,9 @@ rho_plot(chicago)
 phil <- read_in_city("PHILADELPHIA")[[1]]
 phil_betas <- read_in_city("PHILADELPHIA")[[2]]
 
-scale_optim_phil <- optim_bandwidth(phil)
+scale_optim_chicago <- optim_bandwidth(chicago)
 
-phil <- local_regression(phil, scale_optim_ny)
+chicago <- local_regression(chicago, scale_optim_ny)
 
 SR_plot(chicago)
 IR_plot(chicago)
