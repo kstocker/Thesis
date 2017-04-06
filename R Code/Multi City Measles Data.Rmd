@@ -335,8 +335,6 @@ boston_betas <- measles_betas %>%
 
 boston_betas <- unname(unlist(boston_betas[1,]))
 
-rm(measles)
-rm(measles_betas)
 ```
 
 ```{r Susceptible Reconstruction, echo=FALSE}
@@ -378,47 +376,48 @@ print(boston_accuracy)
 
 ```{r}
 #Test for lowest and highest populations
-measles<- measles %>%
+measles_<- measles %>%
   filter(year==1920, biweek==1)%>%
   select(loc, pop)
   
-pop <- as.vector(measles$pop)
-names(pop) <- as.vector(measles$loc)
+pop <- as.vector(measles_$pop)
+names(pop) <- as.vector(measles_$loc)
 
 pop<-sort(pop)
 head(pop)
 tail(pop)
 
+
+#Lowest Pops (ascending order):  
+#DULUTH       SPOKANE     READING.US SALT LAKE CITY      NASHVILLE        TRENTON 
+#98917         104437         107784         118110         118342         119289
+
+#Highest Pops (ascending order): 
+#ST LOUIS    CLEVELAND      DETROIT PHILADELPHIA      CHICAGO     NEW YORK 
+#772897       796841       993078      1823779      2701705      5620048 
 ```
 
 ```{r}
-Stan_z_mod <- as.character("
-data {
-	int<lower=1> N; // time steps
-  real P[N]; //population size
-	int <lower=0> I[N]; // infecteds
-	int  Z[N]; // Zt
+#Function for reading in all cities:
+read_in_city <- function(city){
+
+  df <- measles %>%
+  filter(year>1919 & year <1941) %>%
+  filter(loc == city) %>%
+  select(biweek, year, cases, pop, rec) %>%
+  mutate(number = seq(1, 546, 1))
+  
+  betas <- measles_betas %>%
+  filter(city == city) %>%
+  select(contains("biweek"))
+  
+  betas <- unname(unlist(betas[1,]))
+  
+  return(list(df=df, betas=betas))
 }
 
-parameters {
-  real <lower=P[1]/1000, upper= P[N]> Sbar;
-	real<lower=0, upper=200> beta[26];
-}
-
-model {
-	//priors
-  Sbar ~ normal(P[1]/3, P[1]/10);
-	beta[26] ~ gamma(10,4);
-
-	//likelihood
-	for (n in 2:N){
-  I[n] ~ neg_binomial_2(beta[n%26+1]*(I[n-1]^.975)*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
-  }
-}    ") 
-
-start<-Sys.time()
-bayes_z <- stan(model_code = Stan_z_mod, data=bayes_data_ny, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
-Sys.time() - start
+chicago <- read_in_city("CHICAGO")[[1]]
+chicago_betas <- read_in_city("CHICAGO")[[2]]
 ```
 
 To do (4/4/17):
