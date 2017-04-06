@@ -1,0 +1,47 @@
+---
+title: "Notes"
+author: "Kaitlyn Stocker"
+date: "4/6/2017"
+output: html_document
+---
+
+```{r Meeting Notes 3/30/17}
+#meeting notes 3/30/17
+# I have their betas, I know what model - don't know what rho's they fit 
+# can I reverse engineer to figure out rho's?? 
+#one page summary I can write up on local regression to get rho's (Dr haran can ask Matt Ferrari) -- in particular, roughly speaking 1 pg, methodology used in order to get the rho's I get. Add some lil graphs. SEND WITHIN A WEEK 
+
+#first run analysis through all of the cities
+#then talk about what's happening - what's similar, what's different... 
+#what's interesting across these cities? 
+#how to model stuff across cities? (really clever -not spatial model.. things that might be happening synchronicely or a-synchronicely)
+
+#Pick 3 places and try to learn stuff across those 3 places (northeast?) - what have they written about these places - also look at places that are smaller than the big guys (at least 2 of the smaller guys). Compare across... how well things fit for the certain city... ?Proportion of 0 inferred infecteds?...are there die-outs? 
+
+#Look at paper: jandarov (on dr haran's website) on the gravity TSIR model. Get a taste of spatial version. Cool thing: 4 signitures (signiture=characteristic of how an infectious disease plays otu) - one is the propensity to get snuffed out. THey wrote a model that reproduced those characteristics well. *does my fitted model have the same signitures as the model itself 
+
+#forward spatial model is possible - but the inference might be too far. May even be able to do the gravity model 
+```
+
+To do (4/6/17):
+- write one page summary of my SR with seasonal rho's 
+- keep reading Jandarov and Haran paper on TSIR gravity model 
+- troubleshoot bayes issues (phil, boston, stlouis, etc)
+  - anything common between them? (check: paper betas, population, SR and IR graphs)
+- add names of graphs to graphing functions 
+- add new code to deal with NA's 
+  - see if ignoring NA's in cumsum functions fixes the problem, or if greater problems persist     (make sure to remove from both births and cases for same datapoint)
+- Does switching the cumbirths and cumcases in the regression make a difference? maybe try to regress the other way 
+
+
+```{r}
+
+```
+
+Questions for Dr Haran 4/6/17:
+
+- what is the best way to deal with NA's? I don't want to delete them because it will shift my biweeks, and there is no "na.rm" or other option in the cumsum function, which is necessary to reconstruction. For cities with strings of only 1 NA in a row, I took the average of the value before and after it to fill it in - is this an okay thing to do? Feels fudgy but I don't feel like it should impact analysis 
+
+  - if I remove NA's or ignore NA cases when computing cumulative sums, should I also exclude the birth data at those times so that cumulative births and cumulative cases are in line with one another? 
+  
+- some cities run fine through everything, and some come up with errors for bayes. I haven't been able to troubleshoot what the matter is yet. 
