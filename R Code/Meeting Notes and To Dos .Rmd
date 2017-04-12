@@ -50,6 +50,7 @@ Questions for Dr Haran 4/6/17:
 - The betas in your Jandarov paper are much different from the betas in the paper I am working from. Your betas are around 1, the betas that I am working with are in the 20s through 50s. Both are for measles data - why would this be? 
 
 ```{r}
+#meeting notes 4/6/17
 #make a list of strange anomalies (betas, etc)
 
 #Beta mystery: are there variations in betas for the same data sets? What is my Rnot? 
@@ -60,4 +61,10 @@ Questions for Dr Haran 4/6/17:
 
 #not from dr haran but - what if I used NA's to indicate when a spark comes to re-ignite the infection? could maybe use that to find some kind of baby spatial stuff 
 ```
+
+
+To do (4/12/17):
+- fix bandwidth issues for chicago, boston, etc. (anything above .5 or so)
+- run bayes on all new cities!! yayayay!! 
+- better solutions for NA's? 
 

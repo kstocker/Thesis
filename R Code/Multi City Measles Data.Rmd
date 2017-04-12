@@ -369,7 +369,7 @@ boston_betas <- read_in_city("BOSTON", naremove=FALSE)[[2]]
 scale_optim_boston <- optim_bandwidth(boston) 
 scale_optim_boston <- 0.7 #from previous analysis (must redo)
 
-boston <- local_regression(boston, scale_optim_ny)
+boston <- local_regression(boston, scale_optim_boston)
 
 
 #New York Reconstruction (12.52898 mins run time)
