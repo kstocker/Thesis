@@ -49,6 +49,12 @@ read_in_city <- function(city_, naremove){
   }
   }
   
+  for(i in 1:nrow(df)){
+    if(df$cases[i]==0){
+      df$cases[i]<-0.5
+    }
+  }
+  
   betas <- measles_betas %>%
   filter(city == city_) %>%
   select(contains("biweek"))
@@ -357,18 +363,18 @@ measles_betas <- read.csv(file = "/Users/Kaitlyn/Documents/Thesis Work /Datasets
 
 ```{r Susceptible Reconstruction, echo=FALSE}
 #Boston Reconstruction 
-boston <- read_in_city("BOSTON")[[1]]
-boston_betas <- read_in_city("BOSTON")[[2]]
+boston <- read_in_city("BOSTON", naremove=FALSE)[[1]]
+boston_betas <- read_in_city("BOSTON", naremove=FALSE)[[2]]
 
-#scale_optim_boston <- optim_bandwidth(boston) 
-scale_optim_boston <- 0.7 #from previous analysis 
+scale_optim_boston <- optim_bandwidth(boston) 
+scale_optim_boston <- 0.7 #from previous analysis (must redo)
 
 boston <- local_regression(boston, scale_optim_ny)
 
 
 #New York Reconstruction (12.52898 mins run time)
-newyork <- read_in_city("NEW YORK")[[1]]
-ny_betas <- read_in_city("NEW YORK")[[2]]
+newyork <- read_in_city("NEW YORK", naremove=FALSE)[[1]]
+ny_betas <- read_in_city("NEW YORK", naremove=FALSE)[[2]]
 
 #scale_optim_ny <- optim_bandwidth(newyork)
 scale_optim_ny <- 0.28 #from previous analysis 
@@ -378,8 +384,8 @@ newyork <- local_regression(newyork, scale_optim_ny)
 
 
 #Chicago Reconstruction: removed 1 NA
-chicago <- read_in_city("CHICAGO")[[1]]
-chicago_betas <- read_in_city("CHICAGO")[[2]]
+chicago <- read_in_city("CHICAGO", naremove=TRUE)[[1]]
+chicago_betas <- read_in_city("CHICAGO", naremove=TRUE)[[2]]
 
 scale_optim_chicago <- 0.89 #WAY too high. Use NY scale optim
 
@@ -388,8 +394,8 @@ chicago <- local_regression(chicago, scale_optim_ny)
 
 
 #Philadelphia
-phil <- read_in_city("PHILADELPHIA")[[1]]
-phil_betas <- read_in_city("PHILADELPHIA")[[2]]
+phil <- read_in_city("PHILADELPHIA", naremove=FALSE)[[1]]
+phil_betas <- read_in_city("PHILADELPHIA", naremove=FALSE)[[2]]
 
 scale_optim_phil <- 0.37
 
@@ -397,8 +403,9 @@ phil <- local_regression(phil, scale_optim_phil)
 
 
 #St Louis
-stlouis <- read_in_city("ST LOUIS")[[1]]
-stlouis_betas <- read_in_city("ST LOUIS")[[2]]
+stlouis <- read_in_city("ST LOUIS", naremove=FALSE)[[1]]
+stlouis_betas <- read_in_city("ST LOUIS", naremove=FALSE)[[2]]
+stlouis <- fix_na(stlouis, m=c(69, 70), 68, 71)
 
 scale_optim_stlouis <- 0.3
 
@@ -406,21 +413,54 @@ stlouis <- local_regression(stlouis, scale_optim_stlouis)
 
 
 #Baltimore
-baltimore <- read_in_city("BALTIMORE")[[1]]
-baltimore_betas <- read_in_city("BALTIMORE")[[2]]
+baltimore <- read_in_city("BALTIMORE", naremove=FALSE)[[1]]
+baltimore_betas <- read_in_city("BALTIMORE", naremove=FALSE)[[2]]
 
 scale_optim_baltimore <- optim_bandwidth(baltimore)
 
 baltimore <- local_regression(baltimore, scale_optim_ny)
 
 #Detroit
-detroit <- read_in_city("DETROIT")[[1]]
+detroit <- read_in_city("DETROIT", naremove=TRUE)[[1]]
+detroit_betas <- read_in_city("DETROIT", naremove=TRUE)[[2]]
+
+scale_optim_detroit <- optim_bandwidth(detroit)
+
+detroit <- local_regression(detroit, scale_optim_ny)#note: change optim scale later
 
 #Cleveland
-cleveland <- read_in_city("CLEVELAND")[[1]]
+cleveland <- read_in_city("CLEVELAND", naremove=FALSE)[[1]]
+cleveland <- fix_na(cleveland, m=c(34, 35), 33, 36)
+
+cleveland <- local_regression(cleveland, scale_optim_ny)
 
 #Indianapolis
-Indianapolis <- read_in_city("INDIANAPOLIS")[[1]]
+Indianapolis <- read_in_city("INDIANAPOLIS", naremove=TRUE)[[1]]
+
+
+#Spokane
+spokane <- read_in_city("SPOKANE", naremove=FALSE)[[1]]
+
+spokane <- fix_na(spokane, 1, 2, 2) #fix nas 
+spokane <- fix_na(spokane, 3, 2, 4)
+spokane <- fix_na(spokane, 22, 21, 23)
+spokane <- fix_na(spokane, m=c(43, 44), 42, 45)
+spokane <- fix_na(spokane, m=47, 46, 48)
+spokane <- fix_na(spokane, m=seq(49,53,1), 48, 54)
+spokane <- fix_na(spokane, m=seq(56,60,1), 55, 61)
+spokane <- fix_na(spokane, m=62, 61, 63)
+spokane <- fix_na(spokane, m=seq(66,67,1), 65, 68)
+spokane <- fix_na(spokane, m=seq(69,70,1), 68, 71)
+spokane <- fix_na(spokane, m=72, 71, 73)
+spokane <- fix_na(spokane, m=seq(79,80,1), 78, 81)
+spokane <- fix_na(spokane, m=83, 82, 84)
+spokane <- fix_na(spokane, m=85, 84, 86)
+spokane <- fix_na(spokane, m=c(85, 86), 84, 87)
+spokane <- fix_na(spokane, m=96, 95, 97)
+spokane <- fix_na(spokane, m=112, 111, 113)
+
+#New Orleans
+neworleans <- read_in_city("NEW ORLEANS")[[1]]
 
 #Milwaukee
 milwaukee <- read_in_city("MILWAUKEE")[[1]]
@@ -429,18 +469,10 @@ milwaukee <- read_in_city("MILWAUKEE")[[1]]
 minneapolis <- read_in_city("MINNEAPOLIS")[[1]]
 
 #Los Angeles
-LA <- read_in_city("LOS ANGELES")[[1]]
+LA <- read_in_city("LOS ANGELES", naremove=TRUE)[[1]]
 
 #Washington
 washington <- read_in_city("WASHINGTON")[[1]]
-
-#Spokane
-spokane <- read_in_city("SPOKANE")[[1]]
-
-#New Orleans
-neworleans <- read_in_city("NEW ORLEANS")[[1]]
-
-
 
 ```
 
@@ -483,13 +515,17 @@ ny_bayes <- run_bayes(newyork, which_stan = "high_pop")
 
 chicago_bayes<- run_bayes(chicago, which_stan = "high_pop")
 
-boston_bayes <- run_bayes(boston, which_stan="high_pop")
+boston_bayes <- run_bayes(boston, which_stan="high_pop") #broken
 
-phil_bayes <- run_bayes(phil, which_stan = "high_pop")
+phil_bayes <- run_bayes(phil, which_stan = "high_pop")  #broken
 
-stlouis_bayes <- run_bayes(stlouis, which_stan="high_pop")
+stlouis_bayes <- run_bayes(stlouis, which_stan="high_pop") #broken
 
-baltimore_bayes <- run_bayes(baltimore, which_stan="high_pop")
+baltimore_bayes <- run_bayes(baltimore, which_stan="high_pop") #broken
+
+detroit_bayes <- run_bayes(detroit, which_stan="high_pop") #broken
+
+cleveland_bayes <- run_bayes(cleveland, which_stan = "high_pop") #broken
 ```
 
 ```{r Check Accuracy, echo=FALSE}
