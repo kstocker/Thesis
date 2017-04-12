@@ -31,6 +31,7 @@ To do (4/6/17):
 - add names of graphs to graphing functions 
 - add new code to deal with NA's 
   - see if ignoring NA's in cumsum functions fixes the problem, or if greater problems persist     (make sure to remove from both births and cases for same datapoint)
+  - are NA's die outs???
 - Does switching the cumbirths and cumcases in the regression make a difference? maybe try to regress the other way 
 
 
@@ -41,7 +42,22 @@ To do (4/6/17):
 Questions for Dr Haran 4/6/17:
 
 - what is the best way to deal with NA's? I don't want to delete them because it will shift my biweeks, and there is no "na.rm" or other option in the cumsum function, which is necessary to reconstruction. For cities with strings of only 1 NA in a row, I took the average of the value before and after it to fill it in - is this an okay thing to do? Feels fudgy but I don't feel like it should impact analysis 
-
-  - if I remove NA's or ignore NA cases when computing cumulative sums, should I also exclude the birth data at those times so that cumulative births and cumulative cases are in line with one another? 
+  -answer: all of the missing values are now new parameters to estimate in the model (in bayes)- need to make sure that there's a way for the model to learn about the missing values from the data
+  
   
 - some cities run fine through everything, and some come up with errors for bayes. I haven't been able to troubleshoot what the matter is yet. 
+
+- The betas in your Jandarov paper are much different from the betas in the paper I am working from. Your betas are around 1, the betas that I am working with are in the 20s through 50s. Both are for measles data - why would this be? 
+
+```{r}
+#make a list of strange anomalies (betas, etc)
+
+#Beta mystery: are there variations in betas for the same data sets? What is my Rnot? 
+
+#figure out if NA's are actually zeros
+#find distribution of preceding values, distribution of post values, is it decreasing and then increasing? etc. If they are zeros, input 0.5 or 1 or something similar to start 
+#use interpolator or -- build an empirical conditional distribution so look at what's happening around an NA, find places in data where things look similar but withouth NA's and assume that the same thing would be about the same 
+
+#not from dr haran but - what if I used NA's to indicate when a spark comes to re-ignite the infection? could maybe use that to find some kind of baby spatial stuff 
+```
+
