@@ -33,7 +33,7 @@ names(results) <- c("I", "S", "R")
 return(results)
 }
 
-read_in_city <- function(city_){
+read_in_city <- function(city_, naremove){
 
   df <- measles %>%
   filter(year>1919 & year <1941) %>%
@@ -41,10 +41,12 @@ read_in_city <- function(city_){
   select(biweek, year, cases, pop, rec) %>%
   mutate(number = seq(1, 546, 1))
   
+  if(naremove==TRUE){
   for(i in 1:nrow(df)){
     if(is.na(df$cases[i])==TRUE){
       df$cases[i] <- (df$cases[i-1]+df$cases[i+2])/2
     }
+  }
   }
   
   betas <- measles_betas %>%
@@ -333,6 +335,13 @@ accuracy_check <- function(betas, bayes){
 
 return(list(containbeta_sr=containbeta_sr, beta_resid=summary(beta_resid), beta_percent_error=summary(beta_percent_error), beta_estimate = beta_estimate, sbar_lower = lowlim_Sbar, sbar_upper = uplim_Sbar))
 }
+
+fix_na <- function(df, m, k, j){
+  for(i in 1:length(m)){
+  df$cases[m[i]] <- (df$cases[k] + df$cases[j])/2
+  }
+  return(df)
+}
 ```
 
 
@@ -403,6 +412,34 @@ baltimore_betas <- read_in_city("BALTIMORE")[[2]]
 scale_optim_baltimore <- optim_bandwidth(baltimore)
 
 baltimore <- local_regression(baltimore, scale_optim_ny)
+
+#Detroit
+detroit <- read_in_city("DETROIT")[[1]]
+
+#Cleveland
+cleveland <- read_in_city("CLEVELAND")[[1]]
+
+#Indianapolis
+Indianapolis <- read_in_city("INDIANAPOLIS")[[1]]
+
+#Milwaukee
+milwaukee <- read_in_city("MILWAUKEE")[[1]]
+
+#Minneapolis
+minneapolis <- read_in_city("MINNEAPOLIS")[[1]]
+
+#Los Angeles
+LA <- read_in_city("LOS ANGELES")[[1]]
+
+#Washington
+washington <- read_in_city("WASHINGTON")[[1]]
+
+#Spokane
+spokane <- read_in_city("SPOKANE")[[1]]
+
+#New Orleans
+neworleans <- read_in_city("NEW ORLEANS")[[1]]
+
 
 
 ```
@@ -512,6 +549,79 @@ sort(number_na)
 ```
 
 ```{r Function Testing Center, eval=FALSE, include=FALSE}
+read_in_city_na <- function(city_){
+
+  df <- measles %>%
+  filter(year>1919 & year <1941) %>%
+  filter(loc == city_) %>%
+  select(biweek, year, cases, pop, rec) %>%
+  mutate(number = seq(1, 546, 1))
+  
+  nas <- which(is.na(df$cases))
+  
+  for(i in nas){
+    if(i==1 &((i+1) %in% nas)==FALSE){
+      df$cases[i] <- df$cases[i+1]
+    }
+     if(i==1 &((i+1) %in% nas)==TRUE){
+      df$cases[i] <- df$cases[i+1]
+    }
+    if(i!=1 & ((i-1) %in% nas)==FALSE{
+      df$cases[i] <- (df$cases[i-1]+df$cases[i+2])/2
+    }
+  }
+  
+  betas <- measles_betas %>%
+  filter(city == city_) %>%
+  select(contains("biweek"))
+  
+  betas <- unname(unlist(betas[1,]))
+  
+  return(list(df=df, betas=betas))
+}
+```
+
+```{NA Notes, eval=FALSE, include=FALSE}
+#NA Notes:
+
+#Chicago: one NA at chicago$cases[71]. Sequence: 84 47 NA 54 56. Occurs at a trough. Decreasing prior to NA, increasing after.
+
+#St Louis: 2 NAs at stlouis$cases[69,70]. Sequence: 17  8  3  5 NA NA  2  3  2  3. Occurs at a trough. Decreasing before NA, increasing after.
+
+#Detroit: 1 NA at detroit$cases[88]. Sequence:  99 157 307 454  NA 715 649 336 112. Does not occur at trough - occurs at peak. Increasing and then decreasing. 
+
+#Cleveland: 2 NAs at 34,35. Sequence:  46  62  84  70  NA  NA 107  98  90  63  33. Does not occur at true trough. 
+
+#Indianapolis: 2 NAs at 18 and 39. Sequence: 125   28    7   12
+#  4   NA    2    6   17   17    4    8   10   26   36   13   14   25   11   14
+#   22   21    8   10    8   10   NA    4. Both occur at troughs - likely they are die outs. 
+
+#LA: 4 NAs at 44, 69, 75, and 321. First 3 occur at definite troughs (2 cases reported on either side). The one at 321 also may be a trough/die out - it is between a 21 and a 32. 
+
+#Spokane: 29 NAs at 1   3  22  43  44  47  49  50  51  52  53  56  57  58  59  60  62  66  67  69 70  72  79  80  83  85  86  96 112. All appear likely to be die outs, most occur where reported cases is less than 5 (exceptions: NA at spokane$cases[3] occurs between a 4 and 67. NA at spokane$cases[112] occurs between a 36 and 18).  ADDITIONAL NOTE: 0 is sometimes listed as a value of reported cases. 0 and NA are not synonymous (see spokane$cases[114])
+
+
+#Spokane Fix NA:
+spokane <- fix_na(spokane, 1, 2, 2)
+spokane <- fix_na(spokane, 3, 2, 4)
+spokane <- fix_na(spokane, 22, 21, 23)
+spokane <- fix_na(spokane, m=c(43, 44), 42, 45)
+spokane <- fix_na(spokane, m=47, 46, 48)
+spokane <- fix_na(spokane, m=seq(49,53,1), 48, 54)
+spokane <- fix_na(spokane, m=seq(56,60,1), 55, 61)
+spokane <- fix_na(spokane, m=62, 61, 63)
+spokane <- fix_na(spokane, m=seq(66,67,1), 65, 68)
+spokane <- fix_na(spokane, m=seq(69,70,1), 68, 71)
+spokane <- fix_na(spokane, m=72, 71, 73)
+spokane <- fix_na(spokane, m=seq(79,80,1), 78, 81)
+spokane <- fix_na(spokane, m=83, 82, 84)
+spokane <- fix_na(spokane, m=85, 84, 86)
+spokane <- fix_na(spokane, m=c(85, 86), 84, 87)
+spokane <- fix_na(spokane, m=96, 95, 97)
+spokane <- fix_na(spokane, m=112, 111, 113)
+
+#St Louis Fix NA
+stlouis <- fix_na(stlouis, m=c(69, 70), 68, 71)
 
 
 ```
