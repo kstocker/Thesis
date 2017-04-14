@@ -50,7 +50,7 @@ read_in_city <- function(city_, naremove){
   }
   
   for(i in 1:nrow(df)){
-    if(df$cases[i]==0){
+    if(is.na(df$cases[i])==FALSE & df$cases[i]==0){
       df$cases[i]<-0.5
     }
   }
@@ -366,7 +366,7 @@ measles_betas <- read.csv(file = "/Users/Kaitlyn/Documents/Thesis Work /Datasets
 boston <- read_in_city("BOSTON", naremove=FALSE)[[1]]
 boston_betas <- read_in_city("BOSTON", naremove=FALSE)[[2]]
 
-scale_optim_boston <- optim_bandwidth(boston) 
+# scale_optim_boston <- optim_bandwidth(boston) 
 scale_optim_boston <- 0.7 #from previous analysis (must redo)
 
 boston <- local_regression(boston, scale_optim_boston)
@@ -430,16 +430,20 @@ detroit <- local_regression(detroit, scale_optim_ny)#note: change optim scale la
 
 #Cleveland
 cleveland <- read_in_city("CLEVELAND", naremove=FALSE)[[1]]
+cleveland_betas <- read_in_city("CLEVELAND", naremove=FALSE)[[2]]
 cleveland <- fix_na(cleveland, m=c(34, 35), 33, 36)
 
 cleveland <- local_regression(cleveland, scale_optim_ny)
 
 #Indianapolis
-Indianapolis <- read_in_city("INDIANAPOLIS", naremove=TRUE)[[1]]
+indianapolis <- read_in_city("INDIANAPOLIS", naremove=TRUE)[[1]]
+indianapolis_betas <- read_in_city("INDIANAPOLIS", naremove=TRUE)[[2]]
 
+indianapolis <- local_regression(indianapolis, scale_optim_ny)
 
 #Spokane
 spokane <- read_in_city("SPOKANE", naremove=FALSE)[[1]]
+spokane_betas <- read_in_city("SPOKANE", naremove=FALSE)[[2]]
 
 spokane <- fix_na(spokane, 1, 2, 2) #fix nas 
 spokane <- fix_na(spokane, 3, 2, 4)
@@ -459,20 +463,30 @@ spokane <- fix_na(spokane, m=c(85, 86), 84, 87)
 spokane <- fix_na(spokane, m=96, 95, 97)
 spokane <- fix_na(spokane, m=112, 111, 113)
 
+spokane <- local_regression(spokane, scale_optim_ny)
+
 #New Orleans
-neworleans <- read_in_city("NEW ORLEANS")[[1]]
+neworleans <- read_in_city("NEW ORLEANS", naremove=TRUE)[[1]]
+neworleans_betas <- read_in_city("NEW ORLEANS", naremove=TRUE)[[2]]
 
-#Milwaukee
-milwaukee <- read_in_city("MILWAUKEE")[[1]]
+neworleans<-fix_na(neworleans, m=seq(38,43), 37, 44)
+neworleans<-fix_na(neworleans, m=47, 46, 48)
+neworleans<-fix_na(neworleans, m=seq(49,52), 48, 53)
+neworleans<-fix_na(neworleans, m=seq(62,70), 61, 71)
 
-#Minneapolis
-minneapolis <- read_in_city("MINNEAPOLIS")[[1]]
+neworleans <- local_regression(neworleans, scale_optim_ny)
 
-#Los Angeles
-LA <- read_in_city("LOS ANGELES", naremove=TRUE)[[1]]
-
-#Washington
-washington <- read_in_city("WASHINGTON")[[1]]
+# #Milwaukee
+# milwaukee <- read_in_city("MILWAUKEE")[[1]]
+# 
+# #Minneapolis
+# minneapolis <- read_in_city("MINNEAPOLIS")[[1]]
+# 
+# #Los Angeles
+# LA <- read_in_city("LOS ANGELES", naremove=TRUE)[[1]]
+# 
+# #Washington
+# washington <- read_in_city("WASHINGTON")[[1]]
 
 ```
 
@@ -507,6 +521,27 @@ rho_plot(stlouis, "St Louis Rho")
 SR_plot(chicago, "Chicago Susceptible Reconstruction")
 IR_plot(chicago, "Chicago Infected Reconstruction")
 rho_plot(chicago, "Chicago Rho")
+
+#Detroit Plots
+SR_plot(detroit, "Detroit Susceptible Reconstruction")
+IR_plot(detroit, "Detroit Infected Reconstruction")
+rho_plot(detroit, "Detroit Rho")
+
+#Cleveland Plots
+SR_plot(cleveland, "Cleveland Susceptible Reconstruction")
+IR_plot(cleveland, "Cleveland Infected Reconstruction")
+rho_plot(cleveland, "Cleveland Rho")
+
+#Indianapolis Plots
+SR_plot(indianapolis, "Indianapolis Susceptible Reconstruction")
+IR_plot(indianapolis, "Indianapolis Infected Reconstruction")
+rho_plot(indianapolis, "Indianapolis Rho")
+
+#Spokane Plots
+SR_plot(spokane, "Spokane Susceptible Reconstruction")
+IR_plot(spokane, "Spokane Infected Reconstruction")
+rho_plot(spokane, "Spokane Rho")
+
 ```
 
 
@@ -515,17 +550,21 @@ ny_bayes <- run_bayes(newyork, which_stan = "high_pop")
 
 chicago_bayes<- run_bayes(chicago, which_stan = "high_pop")
 
-boston_bayes <- run_bayes(boston, which_stan="high_pop") #broken
+boston_bayes <- run_bayes(boston, which_stan="high_pop") 
 
-phil_bayes <- run_bayes(phil, which_stan = "high_pop")  #broken
+phil_bayes <- run_bayes(phil, which_stan = "high_pop")  
 
-stlouis_bayes <- run_bayes(stlouis, which_stan="high_pop") #broken
+stlouis_bayes <- run_bayes(stlouis, which_stan="high_pop") 
 
-baltimore_bayes <- run_bayes(baltimore, which_stan="high_pop") #broken
+baltimore_bayes <- run_bayes(baltimore, which_stan="high_pop") 
 
-detroit_bayes <- run_bayes(detroit, which_stan="high_pop") #broken
+detroit_bayes <- run_bayes(detroit, which_stan="high_pop") 
 
-cleveland_bayes <- run_bayes(cleveland, which_stan = "high_pop") #broken
+cleveland_bayes <- run_bayes(cleveland, which_stan = "high_pop") 
+
+indianapolis_bayes <- run_bayes(indianapolis, which_stan = "high_pop") 
+
+spokane_bayes <- run_bayes(spokane, which_stan = "high_pop") 
 ```
 
 ```{r Check Accuracy, echo=FALSE}
@@ -537,13 +576,53 @@ ggplot(, aes(x=seq(1,26,1)))+
   geom_point(aes(y=ny_betas, col="Paper Betas"))+
   labs(x="biweek", y="beta", title="New York Beta Comparison")
 
-#Chicago: Betas follow same trend as paper, but they are consistently below the paper values
+#Chicago: Betas look very accurate using ny optim scale!
 chicago_accuracy <- accuracy_check(chicago_betas, chicago_bayes)
 
 ggplot(, aes(x=seq(1,26,1)))+
   geom_point(aes(y=chicago_accuracy$beta_estimate, col="Estimated Betas"))+
   geom_point(aes(y=chicago_betas, col="Paper Betas"))+
   labs(x="biweek", y="beta", title="Chicago Beta Comparison")
+
+#Boston:
+boston_accuracy <- accuracy_check(boston_betas, boston_bayes)
+
+ggplot(, aes(x=seq(1,26,1)))+
+  geom_point(aes(y=boston_accuracy$beta_estimate, col="Estimated Betas"))+
+  geom_point(aes(y=boston_betas, col="Paper Betas"))+
+  labs(x="biweek", y="beta", title="Boston Beta Comparison")
+
+#Philly:
+phil_accuracy <- accuracy_check(phil_betas, phil_bayes)
+
+ggplot(, aes(x=seq(1,26,1)))+
+  geom_point(aes(y=phil_accuracy$beta_estimate, col="Estimated Betas"))+
+  geom_point(aes(y=phil_betas, col="Paper Betas"))+
+  labs(x="biweek", y="beta", title="Philadelphia Beta Comparison")
+
+#Baltimore:
+baltimore_accuracy <- accuracy_check(baltimore_betas, baltimore_bayes)
+
+ggplot(, aes(x=seq(1,26,1)))+
+  geom_point(aes(y=baltimore_accuracy$beta_estimate, col="Estimated Betas"))+
+  geom_point(aes(y=baltimore_betas, col="Paper Betas"))+
+  labs(x="biweek", y="beta", title="Baltimore Beta Comparison")
+
+#St Louis:
+stlouis_accuracy <- accuracy_check(stlouis_betas, stlouis_bayes)
+
+ggplot(, aes(x=seq(1,26,1)))+
+  geom_point(aes(y=stlouis_accuracy$beta_estimate, col="Estimated Betas"))+
+  geom_point(aes(y=stlouis_betas, col="Paper Betas"))+
+  labs(x="biweek", y="beta", title="St Louis Beta Comparison")
+
+#Spokane:
+spokane_accuracy <- accuracy_check(spokane_betas, spokane_bayes)
+
+ggplot(, aes(x=seq(1,26,1)))+
+  geom_point(aes(y=spokane_accuracy$beta_estimate, col="Estimated Betas"))+
+  geom_point(aes(y=spokane_betas, col="Paper Betas"))+
+  labs(x="biweek", y="beta", title="Boston Beta Comparison")
 ```
 
 ```{r Checking out Data, eval=FALSE, include=FALSE}
@@ -555,9 +634,8 @@ measles_<- measles %>%
 pop <- as.vector(measles_$pop)
 names(pop) <- as.vector(measles_$loc)
 
-pop<-sort(pop)
-head(pop)
-tail(pop)
+sort(pop)
+
 
 
 #Lowest Pops (ascending order):  
