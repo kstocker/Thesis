@@ -1,0 +1,10 @@
+\contentsline {section}{\numberline {1}Introduction}{1}
+\contentsline {section}{\numberline {2}Modeling and Inference for Infectious Disease}{1}
+\contentsline {subsection}{\numberline {2.1}Deterministic Models}{1}
+\contentsline {subsection}{\numberline {2.2}Stochastic Models}{1}
+\contentsline {subsubsection}{\numberline {2.2.1}Chain Binomial}{1}
+\contentsline {subsubsection}{\numberline {2.2.2}TSIR}{1}
+\contentsline {subsubsection}{\numberline {2.2.3}Susceptible Reconstruction}{1}
+\contentsline {subsection}{\numberline {2.3}Spatial Models}{1}
+\contentsline {section}{\numberline {3}Application to Measles}{1}
+\contentsline {section}{\numberline {4}Results}{1}
