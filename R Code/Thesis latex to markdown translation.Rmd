@@ -2,21 +2,35 @@
 title: "Statistical Methods in Infectious Disease Modeling"
 author: "Kaitlyn Stocker"
 date: "4/20/2017"
+header-includes:
+  - \usepackage{graphicx}
+  - \graphicspath{ {/Users/Kaitlyn/Documents/Github/Thesis Git/LaTex Files/Thesis/Plots/} }
+  - \usepackage[export]{adjustbox}
+  - \usepackage[leftcaption]{sidecap}
+  - \usepackage{amssymb}
+  - \usepackage[utf8]{inputenc}
 output:
   pdf_document:
     toc: true
     toc_depth: 3
     number_sections: true
+    fig_caption: true
 bibliography: /Users/Kaitlyn/Documents/Github/Thesis Git/Bibliography.bib
 ---
 \newpage
+```{r Libraries, include=FALSE}
+library(deSolve)
+library(dplyr)
+library(rstan)
+```
+
 
 #Introduction 
 
 #Modeling and Inference for Infectious Diseases 
 
 ##Deterministic
- began my study of infectious disease modeling by working with a deterministic, continuous time model of an SIR disease. For the sake of simplicity, I began by looking at a closed population in which there was no effect of demographics or migration on the population. 
+I began my study of infectious disease modeling by working with a deterministic, continuous time model of an SIR disease. For the sake of simplicity, I began by looking at a closed population in which there was no effect of demographics or migration on the population. 
 
 When modeling the spread of an infectious disease through a population, there are two key parameters of interest: the transmission rate $\beta$, and the recovery rate $\gamma$. The transmission rate is the product of the rate of contact between susceptibles and infecteds in a given population, and the duration of the infection is the average length of time an individual will remain in the infected class. The duration of the infection is then given by the reciprocal of the recovery rate, $frac{1}{\gamma}$. These parameters, together with the initial values of S, I, and R, are the necessary pieces of information required to simulate the spread of the infection through a population. 
 
@@ -29,24 +43,57 @@ The proportion of susceptibles, infecteds, and recovered individuals over time i
 In this model, $\beta SI$ is the transmission term, and represents the number of individuals flowing from the susceptible class into the infected class, and $\gamma I$ represents the flow of individuals from the infected class into the recovered class. 
 
 \paragraph{Simulation}
-To produce an example of what this model looks like in action, I simulated the spread of influenza through a boy's boarding school. I took the values of the parameters and the initial conditions from the book **INSERT CITATION**. In this example, $\beta$ is 1.66, and $\gamma$ is $\frac{1}{2.2}$. In a population of 763 boys, at the start of the epidemic 3 were infected and the rest were in the susceptible class. 
+To produce an example of what this model looks like in action, I simulated the spread of influenza through a boy's boarding school. I took the values of the parameters and the initial conditions from the book [@KeelingBook]. In this example, $\beta$ is 1.66, and $\gamma$ is $\frac{1}{2.2}$. In a population of 763 boys, at the start of the epidemic 3 were infected and the rest were in the susceptible class. 
 
-As the differential equations defining the model are not possible to solve explicitly, I used Euler's method to solve the system. In R, I ran the system of equations through Euler's method with a 0.01 time step for a period of 15 days. I outputted a data frame that included the value of S, I, and R for each time step through completion. Figure \ref{fig:SIRndSim} shows a plot of the proportion of each infection class over time. 
+As the differential equations defining the model are not possible to solve explicitly, I used Euler's method to solve the system. In R, I ran the system of equations through Euler's method with a 0.01 time step for a period of 15 days. I outputted a data frame that included the value of S, I, and R for each time step through completion. Figure \ref{fig:DeterministicSim} shows a plot of the proportion of each infection class over time. 
  
- \begin{figure}[h]
- \includegraphics[scale=.5, outer]{SIRndSim.png}
- \caption{Deterministic SIR Simulation}
- \label{fig:SIRndSim}
- \end{figure}
+ 
+```{r DeterministicSim, echo=FALSE, fig.cap="Deterministic SIR Simulation"}
+SIRsim <- function (parameters = NULL, initial = NULL, time = NULL, ...) ## parameters should be a vector of beta and gamman, initial should be a vector of S(o), T(o), R(o), and time should be start time, end time, dt.
+{
+  evalODE <- function(parameters = NULL, initial = NULL, time = NULL) {
+    diff_eqs <- function(time, initial, parameters) { # diff equations for SIR
+      with(as.list(c(initial, parameters)), {
+        dS <- -beta * S * I
+        dI <- beta * S * I - gamma * I
+        dR <- gamma * I
+        list(c(dS, dI, dR)) # output them as a list
+      })
+    }
+    
+    eval <- ode(times = time, func = diff_eqs, y = initial, # solve the ode using euler method
+                  parms = parameters, method = "euler", ...)
+    return(eval) # evalODE returns the solved ODE's given the parameters/conditions
+  }
+  output <- evalODE(parameters,initial,time) # save the output of evalODE
+  return(list(model = evalODE, pars = parameters, init = initial, 
+              time = time, results = as.data.frame(output))) # return as a list with other columns
+}
+
+plotSIR <- function(output) { # output should be a dataframe (or list) output from SIRsim
+  ggplot(output$results, aes(time)) + 
+    geom_line(aes(y = S, color = "S")) + 
+    geom_line(aes(y = I, color = "I")) +
+    geom_line(aes(y = R, color = "R")) +
+    labs(x="Time (days)", y= "Proportion of Population") +
+    ggtitle("Influenza at a Boarding School Simulation")
+}
+
+
+### Simulating
+parameters <- c(beta = 1.66, gamma = (1/2.2)) # Beta, Gamma
+initial <- c(S = (760/763), I = (3/763), R = 0) # S(o), I(o), R(o)
+time <- seq(0,15,.1) # T0 to T by dt
+influenzaTest <- SIRsim(parameters,initial,time)
+
+## Plotting
+plotSIR(influenzaTest)
+```
 
 \paragraph{Inference}
 I then ran inference on the simulated data to retrieve back the value of $\beta$. To do this, I first created a function that simulated data for a series of $\beta$ values ranging from 0 to 3 with a step of 0.01, maintaining the same initial conditions and $\gamma$ value as the initial simulation. This function created a data frame of results for each value of $\beta$. I then ran a sum of squares function and took the squared difference between the results of my original simulation and the results of my estimation function. A plot of the estimated $\beta$ values against the resulting sum of squares output is presented in figure \ref{fig:SIRndEST}. It is visually evident that the minimum of the function occurs at 1.66, the actual value of $\beta$ that I used to simulate my data. Running the optim function in R to minimize the sum of squares function returned the expected $\beta$ of 1.66. 
 
-\begin{figure}[h]
-\includegraphics[scale=.5, outer]{BetaEstSIRnd.png}
-\caption{Plot of estimated $\beta$ values against their sum of squares output}
-\label{fig:SIRndEST}
-\end{figure}
+
 
 ##Stochastic
 
