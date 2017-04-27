@@ -63,8 +63,10 @@ Questions for Dr Haran 4/6/17:
 ```
 
 
-To do (4/12/17):
-- fix bandwidth issues for chicago, boston, etc. (anything above .5 or so)
-- run bayes on all new cities!! yayayay!! 
-- better solutions for NA's? 
+4/27/17:
+-Talk about parameterizing beta to match with timestep (noteable when switching from deterministic to chain binomial: switch from daily timestep to timestep being equal to the infectious period. Therefore must multiply beta by the length of the infectious period in days)
+- fix figure captions, figure references
+- add citiations
+- move bayesian and MLE inference to their own section
+
 

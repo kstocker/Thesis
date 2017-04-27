@@ -11,6 +11,7 @@ header-includes:
   - \usepackage[utf8]{inputenc}
 output:
   pdf_document:
+    latex_engine: xelatex
     toc: true
     toc_depth: 3
     number_sections: true
@@ -48,7 +49,7 @@ To produce an example of what this model looks like in action, I simulated the s
 As the differential equations defining the model are not possible to solve explicitly, I used Euler's method to solve the system. In R, I ran the system of equations through Euler's method with a 0.01 time step for a period of 15 days. I outputted a data frame that included the value of S, I, and R for each time step through completion. Figure \ref{fig:DeterministicSim} shows a plot of the proportion of each infection class over time. 
  
  
-```{r DeterministicSim, echo=FALSE, fig.cap="Deterministic SIR Simulation"}
+```{r DeterministicSim, echo=FALSE, fig.cap="Deterministic SIR Simulation", fig.width=4, fig.height=4}
 SIRsim <- function (parameters = NULL, initial = NULL, time = NULL, ...) ## parameters should be a vector of beta and gamman, initial should be a vector of S(o), T(o), R(o), and time should be start time, end time, dt.
 {
   evalODE <- function(parameters = NULL, initial = NULL, time = NULL) {
@@ -89,15 +90,213 @@ influenzaTest <- SIRsim(parameters,initial,time)
 ## Plotting
 plotSIR(influenzaTest)
 ```
+\
 
 \paragraph{Inference}
 I then ran inference on the simulated data to retrieve back the value of $\beta$. To do this, I first created a function that simulated data for a series of $\beta$ values ranging from 0 to 3 with a step of 0.01, maintaining the same initial conditions and $\gamma$ value as the initial simulation. This function created a data frame of results for each value of $\beta$. I then ran a sum of squares function and took the squared difference between the results of my original simulation and the results of my estimation function. A plot of the estimated $\beta$ values against the resulting sum of squares output is presented in figure \ref{fig:SIRndEST}. It is visually evident that the minimum of the function occurs at 1.66, the actual value of $\beta$ that I used to simulate my data. Running the optim function in R to minimize the sum of squares function returned the expected $\beta$ of 1.66. 
 
+```{r SIRndEST, echo=FALSE, fig.cap="Plot of estimated beta values against their sum of squares output"}
 
+estimateBeta <- function(data, beta, gamma, initial, time) {
+  j = 0
+  i = 1
+  emptyMatrix = matrix(,nrow=((3/.05)+1),ncol=2) # create empty matrix of the correct size
+  tempVar = beta # set initial beta equal to a temp variable
+  
+  while (beta <= (tempVar + 3)) { # loop through betas until you get to initial beta plus 3
+    SSBeta = 0 # (re)initialize SS to be zero
+    parameters <- c(beta = beta, gamma = gamma) # save new beta as it goes through the loop
+    sim <- SIRsim(parameters,initial,time) # solve the ODE's given that beta
+    for (j in seq(1,nrow(data$results))) { # loop through each t to compute the residuals
+      SSBeta = SSBeta + (sim$results$I[j] - data$results$I[j])^2
+    }
+    emptyMatrix[i,] <- c(beta, SSBeta) # put beta and SSbeta into the matrix
+    i = i + 1 # update row of matrix
+    j = 0 # reset j to be zero
+    beta = beta + .05 # .05 is arbitrary, will probably make it into a parameter of the function so it can be changed easily
+  }
+  colnames(emptyMatrix) <- c("Beta", "SSBeta") # change the col names
+  return(emptyMatrix)
+}
+
+graphBetaEstimates <- function(matrix) { # takes matrix of betas and SSBeta
+  tempDF <- as.data.frame(betaMatrix)
+  ggplot(tempDF, aes(Beta)) + 
+    geom_line(aes(y = SSBeta, color = "SSBeta")) + 
+    labs(x="Beta", y= "Sum of Squares") +
+    ggtitle("Beta Estimation for SIR Simulated Data")+
+    scale_x_continuous(breaks = scales::pretty_breaks(n = 20))  # set x-scale to be something smaller than default
+}
+
+  betaMatrix <- estimateBeta(influenzaTest, 0, (1/2.2), initial, time)
+graphBetaEstimates(betaMatrix)
+```
+\
 
 ##Stochastic
 
 ###Chain Binomial
+One way of adding stochasticity is to use a chain binomial model. In this type of model, we allow the the number of infecteds at each time step to follow a random binomial distribution in which the number of trials is equal to the number of susceptibles at the previous time step (the pool of individuals who could potentially be infected). If we consider \textit{p} to be the probability that contact occurs between a susceptible and a single infected individual and that the contact results in the infection, then the probability of an individual escaping infection from one infected is given by (1-\textit{p}). In order for a given susceptible to escape infection entirely, they must avoid infection from all infecteds in the population at that time. In this way, the probability of a susceptible escaping infection entirely is given by $(1-p)^{I}$. In this case, the probability that a given susceptible will become infected in a given time step is given by $1-(1-p)^{I}$. It follows that the number of infecteds in a given time step follows a binomial distribution with $S_{t-1}$ as the number of trials and $1-(1-p)^{I}$ as the probability of success. 
+
+The next logical step is to define \textit{p} in terms of our parameters, $\beta$ and $\gamma$. We can do this by defining the probability that a given susceptible will become infected in a given time step (with $I_{t}$ infecteds) as $1-exp(-\beta I_{t}/N)$, where \textit{N} is the total population size. I divided the number of infecteds by the population size to obtain the proportion of infecteds in the population. This was necessary because $\beta$ is derived for use with population proportions, and in this model S, I, and R will refer to the number of individuals in each class. We allow length of the infectious period, $\gamma$, to be equal to the time step. In this way, at the end of each time step the infecteds from the previous time step all move into the recovered class. 
+
+\paragraph{Simulation}
+
+I simulated an SIR infection using the chain binomial model. For consistency and comparison, I used the parameters and starting conditions from the Influenza at a Boarding School example, the same example that I used to simulate the deterministic example, taken from [@KeelingBook]. 
+
+
+```{r ChainBinomSim, echo=FALSE, fig.cap="Chain Binomial Simulation"}
+Sim <- function(beta, n, i.now, s.now, r.now, time.steps) {
+
+results <- as.data.frame(matrix(c(0, i.now, s.now, r.now), nrow=1))
+names(results) <- c("time", "I", "S", "R")
+
+  for(j in 1:time.steps){
+    i.next <- rbinom(1, s.now, 1-exp(-beta*i.now/n))
+    s.now <- s.now - i.next
+    r.now <- r.now + i.now
+    i.now <- i.next
+    results <- rbind(results, c(j, i.now, s.now, r.now))
+  }
+return(results)
+}
+
+
+#PLOT
+plot_sim <- function(results){
+  ggplot(results, aes(x=time)) +
+  geom_line(aes(y=S, col="S"))+
+  geom_line(aes(y=I, col="I"))+
+  geom_line(aes(y=R, col="R"))+
+  ggtitle("Chain Binomial SIR Simulation")+
+  labs(x="Time Steps", y="Number of Individuals")
+}
+
+#Simulating
+i.now <- 3
+s.now <- 760
+r.now <- 0
+time.steps <- 25
+beta <- 1.66*2.2
+n <- 763
+
+results <- Sim(beta=beta, n=n, i.now=i.now, s.now=s.now, r.now=r.now, time.steps)
+
+
+#Plotting Simulation
+plot_sim(results)
+```
+\
+
+To achieve the output in figure \ref{fig:ChainBinomSim}, I ran equations (4) through (6) through a loop for 25 time steps. I chose 25 time steps based on the length of the epidemic observed from running the example using a deterministic model. 
+
+\begin{equation} 
+I_{t+1} \sim Binomial(S_{t}, 1-exp(\frac{-\beta I}{N})) 
+\end{equation}
+\begin{equation} 
+S_{t+1} = S_{t} - I_{t+1} 
+\end{equation}
+\begin{equation}
+R_{t+1} = R_{t} + I_{t}
+\end{equation}
+
+It is clear from figure \ref{fig:ChainBinomSim} and figure \ref{fig:SIRndSim} that the chain binomial model does not have as dramatic of a peak as the deterministic model. 
+
+
+\paragraph{MLE Inference:}
+To run inference on the chain binomial model, I used a maximum likelihood estimate (MLE) approach. To do this, I first found the likelihood function for $\beta$, which is given by equations (7) and (8) below. 
+
+
+\begin{equation}
+\mathcal{L}(\beta) =  \prod_{i=1}^n {I_{i-1}\choose S_{I-1}} p^{I_{i}}(1-p)^{S_{i}}
+~, ~where ~ p = 1-exp(\frac{-\beta I_{i-1}}{N})
+\end{equation}
+This can be simplified to:
+\begin{equation}
+\mathcal{L}(\beta) \propto p^{I_{[i]}}(1-p)^{S_{[i]}}
+\end{equation}
+
+I then used the optimize function in R to compute the value of $\beta$ that maximized the log likelihood function, and received a value of 3.65, which is equal to the value I simulated with, $\beta=1.66*2.2=3.65$. A plot of the likelihood function can be found in figure \ref{fig:ChainBinomMLE}.
+
+
+```{r ChainBinomMLE, echo=FALSE, fig.cap="Plot of the likelihood function for beta for the chain binomial model"}
+MLE <- function(beta1, results){
+likelihood <- function(beta1, results) {
+  z <- 0
+  for(j in 2:time.steps){
+    p <- (1-exp(-beta1*results$I[j-1]/n)) #probability of infection 
+    z <- z - log(p^results$I[j] * (1-p)^results$S[j]) #negative log likelihood
+  }
+  return(z)
+}
+#MLE <- optim(par=beta1, fn=likelihood, method="Brent", lower=0, upper=3, results=results)
+MLE <- optimise(likelihood, lower=0, upper=5, results=results)
+return(MLE)
+}
+
+likelihood <- function(beta1, results) {
+  z <- 0
+  out <- c(z)
+  for(j in 2:time.steps){
+    p <- (1-exp(-beta1*results$I[j-1]/n)) #probability of infection 
+    z <- z - log(p^results$I[j] * (1-p)^results$S[j]) #negative log likelihood
+    out <- cbind(out, z)
+  }
+  out<-as.vector(out)
+  return(out)
+}
+
+plot_likelihood <- function(likelihood){
+  ggplot(, aes(x=seq(1, 5, length.out=length(likelihood))))+
+    geom_line(aes(y=likelihood))
+}
+
+beta1 <- 1
+estimate <- MLE(beta1=beta1, results)
+likelihood1 <- likelihood(beta1=beta1, results)
+plot_likelihood(likelihood1)
+
+```
+
+
+\paragraph{Bayesian Inference:}
+
+
+Unlike the classical approach, which treats model parameters as fixed values, Bayesian inference treats model parameters as random variables. The distribution of the parameters is calculated via Bayes' Theorem based on information given via a prior distribution and a likelihood computed based on the data. This final distribution is called the posterior distribution, and it gives all relevant information about the parameters, including point and interval estimates. The posterior distribution is defined more precisely in the equation below:
+
+\begin{figure}[htbp]
+\includegraphics[scale=.25, center]{ChainBinomBayesDensity.png}
+\caption{Plot of the posterior density functions for $\beta$ and $\gamma$ respectively}
+\label{fig:ChainBinomBayesDensity}
+\end{figure}
+
+
+\begin{figure}[htbp]
+\includegraphics[scale=.2, center]{ChainBinomBetaPosPriorPlot.png}
+\includegraphics[scale=.2, center]{ChainBinomGammaPosPriorPlot.png}
+\caption{Plot of the posterior density function plotted over the prior density function for $\beta$ and $\gamma$ respectively}
+\label{fig:ChainBinomPosPriorPlots}
+\end{figure}
+
+\begin{equation}
+P(\theta \mid y) = \frac{P(\theta)P(y \mid \theta)}{\int P(\theta)P(y \mid \theta) d\theta}
+\end{equation}
+
+
+
+Where $P(\theta)$ is the prior distribution, $y$ is the data, and $P(y \mid \theta)$ is the likelihood function. 
+
+To run inference on my simulated epidemic data, I used Bayesian inference with the Markov chain Monte Carlo (MCMC) method. The MCMC method allows samples to be drawn from the target distribution - in this case, the samples are drawn from the joint posterior distribution of the model parameter. 
+
+I started by choosing a prior distribution for $\beta$ and $\gamma$. I chose a gamma distribution with shape parameter equal to 3 and scale parameter equal to 1. This distribution has the majority of its density between 0.5 and 5, which is a reasonable range within which to expect $\beta$. For the prior on $\gamma$ I chose a gamma distribution with shape parameter equal to 2 and a scale parameter equal to 1. I chose this prior for $\gamma$ because it has a strong right skew, and $\gamma$ is typically less than one, as it is the reciprocal of the infectious period. 
+
+I used the package RStan to run Bayesian inference with the MCMC method on my simulated chain binomial model, with the aforementioned priors. Figure \ref{fig:ChainBinomBayesDensity} displays the posterior density plots of $\beta$ and $\gamma$. 
+
+
+The outputted estimate for $\beta$ was 1.66, with a standard error of 0. Recall that the true value of $\beta$ is 1.66. This level of accuracy is possible only with data simulated without any noise. Figure \ref{fig:ChainBinomPosPriorPlots} also shows the lack of error in the posterior density of $\beta$. The outputted estimate for $\gamma$ was 0.76 with a standard error of 0.33. The 95\% credible interval for $\gamma$ was (0.13, 1.40), which contains the true $\gamma$ of $\frac{1}{2.2}$ or 0.455. 
+
+Based on simulated examples, recovery of $\beta$ appears to be more precise than that of $\gamma$. This may, however, be a result of simulation mechanics. For small population sizes, recovery of $\gamma$ was unreliable. However, population size did not affect the ability to accurately recover $\beta$.  
+
 
 ###TSIR
 
