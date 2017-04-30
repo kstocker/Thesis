@@ -70,3 +70,9 @@ Questions for Dr Haran 4/6/17:
 - move bayesian and MLE inference to their own section
 
 
+4/27 Meeting Notes:
+- Next week: ben will be gone 
+- NO MEETING 18th and 25th (resume June 1)
+- if I find Ottar: ask him about reporting rates
+- could put together code and examples and put it on github (vignette of infetious disease)
+
