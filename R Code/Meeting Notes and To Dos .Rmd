@@ -92,3 +92,6 @@ THESIS WRITING TO DO:
 - add more citations 
 ```
 
+Questions for Dr. Haran:
+-notation for seasonal rho section
+-what might Finkenstadt and Grenfell mean when they say they chose a bandwidth of .3 times the standard deviation of Xt when sd(cumcases) = 128389.4?s
