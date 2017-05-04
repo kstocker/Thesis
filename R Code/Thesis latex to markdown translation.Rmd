@@ -747,7 +747,9 @@ w_{i}(x_{t})=\frac{K(\frac{x_{0}-x_{i}}{h})}{\sum_{i=1}^{m}K(\frac{x_{0}-x_{i}}{
 
 In which $K(x)$ is the gaussian kernel function, and $w_{i}(x)$ gives the weight function. I applied the weight function to each row of the $X_{n}$ matrix, for which $x_{0}$ is the focal, or central, $x$ value. 
 
-To pull this together with an example, if I were to look at the datapoint $x_{10}$ (the sum of the cases from the first 10 biweeks), I would first create a vector of length $m$ of the $x_{t}$'s nearest to $x_{10}$. I would then apply the weight function $w_{i}(x_{10})=\frac{K(\frac{x_{10}-x_{i}}{h})}{\sum_{i=1}^{m}K(\frac{x_{10}-x_{i}}{h})}$ to each of the $x_{t}$'s in the neighborhood of $x_{10}$. 
+To pull this together with an example, if I were to look at the datapoint $x_{10}$ (the focal $x_t$ of the $10^{th}$ row of the $X_{n}$ matrix), I would first create a vector of length $m$ of the $x_{t}$'s nearest to $x_{10}$. I would then apply the weight function $w_{i}(x_{10})=\frac{K(\frac{x_{10}-x_{i}}{h})}{\sum_{i=1}^{m}K(\frac{x_{10}-x_{i}}{h})}$ to each of the $m$ $x_{t}$'s in the neighborhood of $x_{10}$. I repeated this for each row of the $X_{n}$ matrix, resulting in a weight matrix with the same dimensions of $X_{n}$. 
+
+Once I computed the gaussian weight for each datapoint in the $X_{n}$ matrix, I ran a weighted linear regression on each of the $T$ rows of the $X_{n}$ matrix, using the gaussian weights from the previously computed weight matrix. 
 
 
 
