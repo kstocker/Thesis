@@ -62,7 +62,7 @@ read_in_city <- function(city_, naremove){
   betas <- unname(unlist(betas[1,]))
   
   return(list(df=df, betas=betas))
-} #function for reading in city, pass city as character
+} #pass city as character
 
 gaussian_kernel <- function(x) {
   (1/sqrt(2*pi))*exp(-x^2/2)

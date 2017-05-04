@@ -23,8 +23,355 @@ bibliography: /Users/Kaitlyn/Documents/Github/Thesis Git/Bibliography.bib
 library(deSolve)
 library(dplyr)
 library(rstan)
+library(locfit)
 ```
 
+```{r Functions, include=FALSE}
+#possible error: city$___ might not work... try changing to city[[1]]$___. 
+Sim <- function(beta, pop, i.now, s.now, r.now, births) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now), nrow=1))
+names(results) <- c("I", "S", "R")
+  for(i in 1:545){
+    if(s.now*i.now >0){
+    n.now <- pop[i]
+    i.next <- beta[i]*(i.now^.975)*s.now/n.now
+    #i.next <- rnbinom(n=1, mu=beta[i]*(i.now^.975)*s.now/n.now, size=i.now) 
+    b.now <- births[i]
+    s.now <- s.now - i.next + b.now
+    r.now <- r.now + i.now
+    i.now <- i.next
+    #cases <- i.now/rho[i]
+    results <- rbind(results, c(i.now, s.now, r.now))
+    }
+    else {break}
+  }
+return(results)
+}
+
+read_in_city <- function(city_, naremove){
+
+  df <- measles %>%
+  filter(year>1919 & year <1941) %>%
+  filter(loc == city_) %>%
+  select(biweek, year, cases, pop, rec) %>%
+  mutate(number = seq(1, 546, 1))
+  
+  if(naremove==TRUE){
+  for(i in 1:nrow(df)){
+    if(is.na(df$cases[i])==TRUE){
+      df$cases[i] <- (df$cases[i-1]+df$cases[i+2])/2
+    }
+  }
+  }
+  
+  for(i in 1:nrow(df)){
+    if(is.na(df$cases[i])==FALSE & df$cases[i]==0){
+      df$cases[i]<-0.5
+    }
+  }
+  
+  betas <- measles_betas %>%
+  filter(city == city_) %>%
+  select(contains("biweek"))
+  
+  betas <- unname(unlist(betas[1,]))
+  
+  return(list(df=df, betas=betas))
+} #pass city as character
+
+gaussian_kernel <- function(x) {
+  (1/sqrt(2*pi))*exp(-x^2/2)
+}
+
+gaussian_sum <- function(i, m) {
+  gaussian_sum <- 0
+  for(k in 1:m){
+      gaussian_sum <- sum(gaussian_kernel((x.n[i,k]-x0[i])/which.diff[i]))
+      return(gaussian_sum)
+    }
+}
+
+gaussian_regression <- function(city, scale){
+  cumbirths <- cumsum(city[[1]]$rec)
+  cumcases <- as.numeric(cumsum(city[[1]]$cases))
+  
+  ord <- order(cumcases)
+  c.cases <- cumcases[ord] 
+  c.births <- cumbirths[ord] 
+
+  m <- floor(length(cumcases)*(scale)) #SCALE GOES HERE
+  h <- m/2
+
+  x0<-0
+  diffs<-matrix(nrow=length(cumcases), ncol=length(cumcases))
+  which.diff<-0
+  x.n <- matrix(nrow=length(cumcases), ncol=m)
+  y.n <- matrix(nrow=length(cumcases), ncol=m)
+
+  for(i in 1:length(cumcases)){
+  x0[i] <- c.cases[i] #set focal x 
+  diffs[i,] <- abs(c.cases - x0[i]) #difference between each datapoint and x0 (x value difference)
+  which.diff[i] <- sort(diffs[i,])[m] #This returns the mth smallest difference between c.births and x0. 
+
+  if(length(c.cases[diffs[i,] <= which.diff[i]])<m){
+    x.n[i,] <- c(c.cases[diffs[i,] <= which.diff[i]], rep(0, length.out=(m-length(c.cases[diffs[i,] <= which.diff[i]])))) #select m closest x values to focal x
+  y.n[i,] <- c(c.births[diffs[i,] <= which.diff[i]], 0) #select m closest corresponding y valeus 
+  }
+  else{
+  x.n[i,] <- head(c.cases[diffs[i,] <= which.diff[i]], m) #select m closest x values to focal x
+  y.n[i,] <- head(c.births[diffs[i,] <= which.diff[i]], m) #select m closest corresponding y valeus 
+  }
+  }
+  
+
+gaussian_kernel <- function(x) {
+  (1/sqrt(2*pi))*exp(-x^2/2)
+}
+
+gaussian_sum <- function(i, m) {
+  gaussian_sum <- 0
+  for(k in 1:m){
+      gaussian_sum <- sum(gaussian_kernel((x.n[i,k]-x0[i])/which.diff[i]))
+      return(gaussian_sum)
+    }
+}
+  
+  x.wt.gaus <- matrix(nrow=length(cumcases), ncol=m)
+  x.coeffs.gaus <- 0
+  for(i in 1:length(cumcases)){
+    for(k in 1:m){
+  x.wt.gaus[i,k]<- gaussian_kernel(x=(x.n[i,k] - x0[i])/which.diff[i])/gaussian_sum(i,m)
+  }
+  }
+  
+  reg.gaus <- lapply(1:length(cumcases), function(x) lm(y.n[x,]~x.n[x,], weights = x.wt.gaus[x,]))
+
+  x.coeffs.gaus <-0
+  x.intercept.gaus <-0
+  y.fit.gaus <- 0
+  for(i in 1:length(reg.gaus)){
+    x.coeffs.gaus[i] <- as.numeric(coef(reg.gaus[[i]])[2])
+    x.intercept.gaus[i] <- as.numeric(coef(reg.gaus[[i]])[1])
+    y.fit.gaus[i] <- x.coeffs.gaus[i]*c.cases[i]+x.intercept.gaus[i]
+  }
+
+T <- seq(1, 546, 1)  
+x.coeffs.gaus.smooth <- fitted(loess(x.coeffs.gaus ~ T))
+y.fit.gaus.smooth <-0
+for(i in 1:length(x.coeffs.gaus.smooth)){
+  y.fit.gaus.smooth[i] <- x.coeffs.gaus.smooth[i]*c.cases[i] + x.intercept.gaus[i]
+}
+
+return(list(y.fit.gaus=y.fit.gaus, y.fit.gaus.smooth=y.fit.gaus.smooth, x.coeffs.gaus=x.coeffs.gaus, x.coeffs.gaus.smooth=x.coeffs.gaus.smooth))
+}
+
+y_hat_linear <- function(x,y){
+  as.numeric(fitted(lm(y~x)))
+}
+
+SSE <- function(y_hat, y){
+  SSE<-0
+  for(i in seq_along(y)){
+  SSE <- sum((y[i]- y_hat[i])^2)
+  return(SSE)
+  }
+}
+
+linear_reconstruction <- function(city){
+  cumbirths <- cumsum(city[[1]]$rec)
+  cumcases <- as.numeric(cumsum(city[[1]]$cases))
+
+  regression_linear <- lm(cumbirths ~ cumcases) 
+  Z_linear <- as.vector(resid(regression_linear))
+  
+  return(list(cumbirths, cumcases, Z_linear))
+}
+
+local_regression <- function(city, scale){
+  cumbirths <- cumsum(city[[1]]$rec)
+  cumcases <- as.numeric(cumsum(city[[1]]$cases))
+  
+  gaus_regression_S <- gaussian_regression(city=city, scale=scale)
+  gaus_regression_I <- gaussian_regression(city=city, scale=scale)
+
+  city$Z_gaus <- cumbirths - gaus_regression_S$y.fit.gaus
+  city$I_gaus <- city$cases*gaus_regression_I$x.coeffs.gaus
+  
+  city$Z_linear <- linear_reconstruction(city)[[3]]
+  city$rho <- gaus_regression_I$x.coeffs.gaus
+  
+  return(city)
+}
+
+SR_plot <- function(city, name){
+    ggplot(city[[1]], aes(x=number))+
+              geom_line(aes(y=Z_gaus, col="Local Regression Estimate of Z")) +
+              geom_line(aes(y=Z_linear, col="Linear Regression Estimate of Z"))+
+              labs(x="Biweek", y="Z", title= name)
+
+}
+
+IR_plot <- function(city, name){
+  ggplot(city[[1]], aes(x=number)) +
+              geom_line(aes(y=cases, col="Reported Cases")) +
+              geom_line(aes(y=I_gaus, col="Estimate of True Infecteds"))+
+              labs(x="Biweek", y="Infecteds/Cases", title = name)
+}
+
+rho_plot <- function(city, name){
+  ggplot(city[[1]], aes(x=number)) +
+                geom_line(aes(y=rho, col="rho"))+
+                labs(x="biweek", y="estimated rho", title = name)
+}
+
+optim_bandwidth <- function(city){
+  cumbirths <- cumsum(city[[1]]$rec)
+  cumcases <- as.numeric(cumsum(city[[1]]$cases))
+  
+  h<- seq(0.05, 0.89, 0.01)
+  SSE1_gaus <- c()
+  for(i in seq_along(h)){
+    if(SSE(y=cumbirths, y_hat=gaussian_regression(city=city, scale=h[i])[[1]]))
+    SSE1_gaus[i] <- SSE(y=cumbirths, y_hat=gaussian_regression(city=city, scale=h[i])[[1]])
+  }
+
+  SSE2_gaus <- c()
+  for(i in seq_along(h)){
+    SSE2_gaus[i] <- SSE(y=y_hat_linear(x=cumcases, y=cumbirths), 
+                        y_hat=gaussian_regression(city=city, scale=h[i])[[1]])
+  }
+
+  SSE_optim_gaus <- which.min(abs(SSE1_gaus-SSE2_gaus)) #Find where SSE1 and SSE2 intersect
+
+  #Select Optimum scale value
+  scale_optim_gaus <- h[SSE_optim_gaus]
+
+  return(scale_optim_gaus)
+}
+
+bayes_data <- function(city){
+  return(list(N=length(city[[1]]$number), P=as.integer(city[[1]]$pop), I=as.integer(city[[1]]$I_gaus),
+              Z=as.integer(city[[1]]$Z_gaus), Zmin=as.integer(abs(min(city[[1]]$Z_gaus)))))
+}
+
+run_bayes <- function(city, which_stan){
+  data <- list(N=length(city$number), P=as.integer(city$pop), I=as.integer(city$I_gaus),
+              Z=as.integer(city$Z_gaus), Zmin=as.integer(abs(min(city$Z_gaus))))
+  
+Stan_z_mod <- as.character("
+data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+	int <lower=0> I[N]; // infecteds
+	int  Z[N]; // Zt
+  int <lower=0> Zmin;
+}
+
+parameters {
+  real <lower=Zmin, upper= P[N]> Sbar;
+	real<lower=5, upper=100> beta[26];
+}
+
+model {
+	//priors
+  Sbar ~ normal(Zmin, P[1]/10);
+	beta[26] ~ gamma(7,5);
+
+	//likelihood
+	for (n in 2:N){
+  I[n] ~ neg_binomial_2(beta[n%26+1]*(I[n-1]^.975)*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+  }
+}    ") 
+
+
+Stan_z_mod_low_pop <- as.character("
+data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+	int <lower=0> I[N]; // infecteds
+	int  Z[N]; // Zt
+  int <lower=0> Zmin;
+}
+
+parameters {
+  real <lower=Zmin, upper= P[N]> Sbar;
+	real<lower=0, upper=200> beta[26];
+}
+
+model {
+	//priors
+  Sbar ~ normal(P[1]/10, P[1]/10);
+	beta[26] ~ gamma(10,4);
+
+	//likelihood
+	for (n in 2:N){
+  I[n] ~ neg_binomial_2(beta[n%26+1]*(I[n-1]^.975)*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+  }
+}    ") 
+
+if(which_stan == "low_pop"){
+bayes_z <- stan(model_code = Stan_z_mod_low_pop, data=data, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
+}
+
+if(which_stan == "high_pop"){
+  bayes_z <- stan(model_code = Stan_z_mod, data=data, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
+}
+
+else{bayes_z <- "error: which_stan"}
+return(bayes_z)
+}
+
+accuracy_check <- function(betas, bayes){
+  betas_bayes <- extract(bayes, permuted=TRUE)
+  beta_ <- betas_bayes$beta
+  Sbar <- betas_bayes$Sbar
+  
+  beta<- matrix(nrow=1000000, ncol=26)
+  for(i in 2:27){
+    beta[,i-1] <- beta_[,i%%26+1]
+  }
+  
+  lowlimbeta_sr <- c()
+  uplimbeta_sr <- c()
+  containbeta_sr <- c()
+  for(i in 1:26){lowlimbeta_sr[i] <- quantile(beta[,i], probs=.025, names=FALSE)
+                uplimbeta_sr[i] <- quantile(beta[,i], probs=.975, names =FALSE)
+                containbeta_sr[i]<- ifelse(lowlimbeta_sr[i] <= betas[i] & uplimbeta_sr[i] 
+                                           >=betas[i], 1, 0)
+  }
+
+
+  beta_estimate <- c()
+  for(i in 1:26){
+    beta_estimate[i] <- quantile(beta[,i], probs=.5, names = FALSE)
+  }
+
+  
+  lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+  uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+  
+  #take difference of paper values and my estimates
+  beta_resid <- beta_estimate - betas
+  beta_percent_error <- beta_resid/betas
+
+return(list(containbeta_sr=containbeta_sr, beta_resid=summary(beta_resid), beta_percent_error=summary(beta_percent_error), beta_estimate = beta_estimate, sbar_lower = lowlim_Sbar, sbar_upper = uplim_Sbar))
+}
+
+fix_na <- function(df, m, k, j){
+  for(i in 1:length(m)){
+  df$cases[m[i]] <- (df$cases[k] + df$cases[j])/2
+  }
+  return(df)
+}
+```
+
+```{r Read Data, include=FALSE}
+#Read in Measles Data from Tycho Paper 
+measles <- read.csv(file = "/Users/Kaitlyn/Documents/Thesis Work /Datasets/measlesUKUS.csv", header=TRUE, stringsAsFactors = FALSE)
+
+measles_betas <- read.csv(file = "/Users/Kaitlyn/Documents/Thesis Work /Datasets/measeles biweekly betas.csv", header=TRUE, stringsAsFactors=FALSE)
+```
 
 #Introduction 
 
@@ -300,6 +647,21 @@ Based on simulated examples, recovery of $\beta$ appears to be more precise than
 
 ###TSIR
 
+
+####Temporally Varying Transmission Rates
+Up to this point, all of my examples have worked under the assumption that $\beta$, the transmission rate of the infection, is constant across time. However, this is really not the case! Many diseases display temporal shifts in transmission rate. For instance, most childhood diseases (such as measles or chickenpox) have higher transmission rates during school terms, and low transmission rates during school breaks. This makes intuitive sense - I would expect an infected child to come in contact with more susceptible children during school terms, when they are in constant contact with other children, than during school breaks, when they may be more isolated from their susceptible peers. 
+
+Measles during the pre-vaccination era displays temporally varying transmission rates, and I will be focusing from here on out on the dynamics of the measles virus. Measles has an infectious period of 2 weeks, and it is commonly modeled as having 26 time-varying transmission rates (one for each bi-week of the year). 
+
+It follows that the transmission rate can be expressed as a function of time, $\beta(t)$. Researcher Bailey (1975) found the transmission rate to be the sinusoid function given in equation 19 below:
+
+\begin{equation}
+\beta(t) = \beta_{0}(1+ \beta_{1}cos(\omega t))
+\end{equation}
+
+The parameter $\beta_{0}$ in equation 19 gives the baseline transmission rate. The parameter $\omega$ gives the period of seasonal forcing, and is therefore equal to $\frac{\pi}{T}$ where $T$ is the number of $\beta$'s in a single calendar year. The parameter $\beta_{1}$ determines the amplitude of the seasonality and is therefore bounded between 0 and 1. For measles, $\beta_{0}$ is around 17 new cases per biweek, and $\omega = \frac{\pi}{26}$. In the case of seasonal transmission rates, $R_{0} = \frac{\beta_{0}}{\gamma}$.
+
+
 ###Susceptible Reconstruction
 In previous exercises, I had access to perfect and complete simulated data. While having such complete data is convenient, it is not realistic. Data gathered in real-world situations is much less inference-ready than the simulated data I have been using thus far.
 
@@ -348,6 +710,34 @@ Y_{t} = -Z_{0} + Z_{t} + \rho X_{t}
 
 Thus we have a linear regression equation relating cumulative births ($Y_{t}$) to cumulative reported cases ($X_{t}$). The susceptible dynamics $Z_{t}$ are the regression remainder to equation 18, and can thus be fully reconstructed. 
 
+The infected dynamics are reconstructed by multiplying the reported cases at each time step by $\rho$, which is obtained as the slope of the linear regression equation. 
+
+####Non-Constant Reporting Rate
+In my previous explanation of susceptible reconstruction, I made a crucial assumption about the rate at which infected individuals are reported: I assumed that the reporting rate was constant across time. This assumption simplified the process of reconstructing susceptible and infected dynamics, but it rarely holds true in the world of real data. 
+
+As an example, let's look at measles data from pre-vaccination era New York City,  from 1920-1940 [@tycho]. Figure \ref{fig:Zlinear} is a graph of the reconstructed susceptible dynamics, obtained as previously described using global linear regression. It is evident from figure \ref{fig:Zlinear} that the Z dynamics suffer from local shifts away from the mean of zero. This indicates that the previously held assumption of constant reporting rate, $\rho$, has been violated. 
+
+
+\begin{figure}[htbp]
+\includegraphics[scale=.5, center]{LinearZ_NY.png}
+\caption{Plot of the reconstructed $Z_{t}$ parameter for measles data in New York City from 1920-1940 using global linear regression, as described in the susceptible reconstruction section above.}
+\label{fig:Zlinear}
+\end{figure}
+
+```{r Zlinear, echo=FALSE, fig.cap="Plot of the reconstructed $Z_{t}$ parameter for measles data in New York City from 1920-1940 using global linear regression, as described in the susceptible reconstruction section above."}
+
+newyork <- read_in_city("NEW YORK", naremove=FALSE)
+
+newyork_Z <- linear_reconstruction(newyork)[[3]]
+
+
+```
+
+
+
+In order to address the temporal variation in the rate at which cases are reported, it is necessary to perform localized linear regression. To do this, I will split the 
+
 \newpage
 #References
 [@KeelingBook]
+[@tycho]

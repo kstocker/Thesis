@@ -76,3 +76,9 @@ Questions for Dr Haran 4/6/17:
 - if I find Ottar: ask him about reporting rates
 - could put together code and examples and put it on github (vignette of infetious disease)
 
+
+THESIS WRITING TO DO:
+- Section on time varying rho/local regression (started in latex)
+- Section about time varying reporting rates, oscillatory dynamics (started in latex)
+- In deterministic and/or chain binomial section, add paragraph talking about parameterizing beta to match with timestep 
+- continue adding plots, re-work examples to be consistent, add citations 
