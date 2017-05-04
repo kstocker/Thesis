@@ -82,3 +82,13 @@ THESIS WRITING TO DO:
 - Section about time varying reporting rates, oscillatory dynamics (started in latex)
 - In deterministic and/or chain binomial section, add paragraph talking about parameterizing beta to match with timestep 
 - continue adding plots, re-work examples to be consistent, add citations 
+
+```{r}
+#Thesis Detail Work:
+- fix axis labels on the MLE plot for chain binomial (and check other axis labels)
+- fix notation in seasonal rho section 
+- fix figure sizing and captioning 
+- fix figure references
+- add more citations 
+```
+

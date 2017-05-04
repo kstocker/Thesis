@@ -24,6 +24,8 @@ library(deSolve)
 library(dplyr)
 library(rstan)
 library(locfit)
+library(gridExtra)
+library(cowplot)
 ```
 
 ```{r Functions, include=FALSE}
@@ -386,10 +388,10 @@ In this model, $\beta SI$ is the transmission term, and represents the number of
 \paragraph{Simulation}
 To produce an example of what this model looks like in action, I simulated the spread of influenza through a boy's boarding school. I took the values of the parameters and the initial conditions from the book [@KeelingBook]. In this example, $\beta$ is 1.66, and $\gamma$ is $\frac{1}{2.2}$. In a population of 763 boys, at the start of the epidemic 3 were infected and the rest were in the susceptible class. 
 
-As the differential equations defining the model are not possible to solve explicitly, I used Euler's method to solve the system. In R, I ran the system of equations through Euler's method with a 0.01 time step for a period of 15 days. I outputted a data frame that included the value of S, I, and R for each time step through completion. Figure \ref{fig:DeterministicSim} shows a plot of the proportion of each infection class over time. 
+As the differential equations defining the model are not possible to solve explicitly, I used Euler's method to solve the system. In R, I ran the system of equations through Euler's method with a 0.01 time step for a period of 15 days. I outputted a data frame that included the value of S, I, and R for each time step through completion. Figure \ref{DeterministicSim} shows a plot of the proportion of each infection class over time. 
  
  
-```{r DeterministicSim, echo=FALSE, fig.cap="Deterministic SIR Simulation", fig.width=4, fig.height=4}
+```{r DeterministicSim, echo=FALSE, fig.cap="Deterministic SIR Simulation \\label{DeterministicSim}", fig.width=4, fig.height=4}
 SIRsim <- function (parameters = NULL, initial = NULL, time = NULL, ...) ## parameters should be a vector of beta and gamman, initial should be a vector of S(o), T(o), R(o), and time should be start time, end time, dt.
 {
   evalODE <- function(parameters = NULL, initial = NULL, time = NULL) {
@@ -433,9 +435,9 @@ plotSIR(influenzaTest)
 
 
 \paragraph{Inference}
-I then ran inference on the simulated data to retrieve back the value of $\beta$. To do this, I first created a function that simulated data for a series of $\beta$ values ranging from 0 to 3 with a step of 0.01, maintaining the same initial conditions and $\gamma$ value as the initial simulation. This function created a data frame of results for each value of $\beta$. I then ran a sum of squares function and took the squared difference between the results of my original simulation and the results of my estimation function. A plot of the estimated $\beta$ values against the resulting sum of squares output is presented in figure \ref{fig:SIRndEST}. It is visually evident that the minimum of the function occurs at 1.66, the actual value of $\beta$ that I used to simulate my data. Running the optim function in R to minimize the sum of squares function returned the expected $\beta$ of 1.66. 
+I then ran inference on the simulated data to retrieve back the value of $\beta$. To do this, I first created a function that simulated data for a series of $\beta$ values ranging from 0 to 3 with a step of 0.01, maintaining the same initial conditions and $\gamma$ value as the initial simulation. This function created a data frame of results for each value of $\beta$. I then ran a sum of squares function and took the squared difference between the results of my original simulation and the results of my estimation function. A plot of the estimated $\beta$ values against the resulting sum of squares output is presented in figure \ref{SIRndEST}. It is visually evident that the minimum of the function occurs at 1.66, the actual value of $\beta$ that I used to simulate my data. Running the optim function in R to minimize the sum of squares function returned the expected $\beta$ of 1.66. 
 
-```{r SIRndEST, echo=FALSE, fig.cap="Plot of estimated beta values against their sum of squares output"}
+```{r SIRndEST, echo=FALSE, fig.cap="Plot of estimated beta values against their sum of squares output \\label{SIRndEST}"}
 
 estimateBeta <- function(data, beta, gamma, initial, time) {
   j = 0
@@ -485,7 +487,7 @@ The next logical step is to define \textit{p} in terms of our parameters, $\beta
 I simulated an SIR infection using the chain binomial model. For consistency and comparison, I used the parameters and starting conditions from the Influenza at a Boarding School example, the same example that I used to simulate the deterministic example, taken from [@KeelingBook]. 
 
 
-```{r ChainBinomSim, echo=FALSE, fig.cap="Chain Binomial Simulation"}
+```{r ChainBinomSim, echo=FALSE, fig.cap="Chain Binomial Simulation \\label{ChainBinomSim}"}
 Sim <- function(beta, n, i.now, s.now, r.now, time.steps) {
 
 results <- as.data.frame(matrix(c(0, i.now, s.now, r.now), nrow=1))
@@ -528,7 +530,7 @@ plot_sim(results)
 ```
 
 
-To achieve the output in figure \ref{fig:ChainBinomSim}, I ran equations (4) through (6) through a loop for 25 time steps. I chose 25 time steps based on the length of the epidemic observed from running the example using a deterministic model. 
+To achieve the output in figure \ref{ChainBinomSim}, I ran equations (4) through (6) through a loop for 25 time steps. I chose 25 time steps based on the length of the epidemic observed from running the example using a deterministic model. 
 
 \begin{equation} 
 I_{t+1} \sim Binomial(S_{t}, 1-exp(\frac{-\beta I}{N})) 
@@ -540,7 +542,7 @@ S_{t+1} = S_{t} - I_{t+1}
 R_{t+1} = R_{t} + I_{t}
 \end{equation}
 
-It is clear from figure \ref{fig:ChainBinomSim} and figure \ref{fig:SIRndSim} that the chain binomial model does not have as dramatic of a peak as the deterministic model. 
+It is clear from figure \ref{ChainBinomSim} and figure \ref{SIRndSim} that the chain binomial model does not have as dramatic of a peak as the deterministic model. 
 
 
 \paragraph{MLE Inference:}
@@ -556,10 +558,10 @@ This can be simplified to:
 \mathcal{L}(\beta) \propto p^{I_{[i]}}(1-p)^{S_{[i]}}
 \end{equation}
 
-I then used the optimize function in R to compute the value of $\beta$ that maximized the log likelihood function, and received a value of 3.65, which is equal to the value I simulated with, $\beta=1.66*2.2=3.65$. A plot of the likelihood function can be found in figure \ref{fig:ChainBinomMLE}.
+I then used the optimize function in R to compute the value of $\beta$ that maximized the log likelihood function, and received a value of 3.65, which is equal to the value I simulated with, $\beta=1.66*2.2=3.65$. A plot of the likelihood function can be found in figure \ref{ChainBinomMLE}.
 
 
-```{r ChainBinomMLE, echo=FALSE, fig.cap="Plot of the likelihood function for beta for the chain binomial model"}
+```{r ChainBinomMLE, echo=FALSE, fig.cap="Plot of the likelihood function for beta for the chain binomial model \\label{ChainBimonMLE}"}
 MLE <- function(beta1, results){
 likelihood <- function(beta1, results) {
   z <- 0
@@ -618,10 +620,10 @@ To run inference on my simulated epidemic data, I used Bayesian inference with t
 
 I started by choosing a prior distribution for $\beta$ and $\gamma$. I chose a gamma distribution with shape parameter equal to 3 and scale parameter equal to 1. This distribution has the majority of its density between 0.5 and 5, which is a reasonable range within which to expect $\beta$. For the prior on $\gamma$ I chose a gamma distribution with shape parameter equal to 2 and a scale parameter equal to 1. I chose this prior for $\gamma$ because it has a strong right skew, and $\gamma$ is typically less than one, as it is the reciprocal of the infectious period. 
 
-I used the package RStan to run Bayesian inference with the MCMC method on my simulated chain binomial model, with the aforementioned priors. Figure \ref{fig:ChainBinomBayesDensity} displays the posterior density plots of $\beta$ and $\gamma$. 
+I used the package RStan to run Bayesian inference with the MCMC method on my simulated chain binomial model, with the aforementioned priors. Figure \ref{ChainBinomBayesDensity} displays the posterior density plots of $\beta$ and $\gamma$. 
 
 
-The outputted estimate for $\beta$ was 1.66, with a standard error of 0. Recall that the true value of $\beta$ is 1.66. This level of accuracy is possible only with data simulated without any noise. Figure \ref{fig:ChainBinomPosPriorPlots} also shows the lack of error in the posterior density of $\beta$. The outputted estimate for $\gamma$ was 0.76 with a standard error of 0.33. The 95\% credible interval for $\gamma$ was (0.13, 1.40), which contains the true $\gamma$ of $\frac{1}{2.2}$ or 0.455. 
+The outputted estimate for $\beta$ was 1.66, with a standard error of 0. Recall that the true value of $\beta$ is 1.66. This level of accuracy is possible only with data simulated without any noise. Figure \ref{ChainBinomPosPriorPlots} also shows the lack of error in the posterior density of $\beta$. The outputted estimate for $\gamma$ was 0.76 with a standard error of 0.33. The 95\% credible interval for $\gamma$ was (0.13, 1.40), which contains the true $\gamma$ of $\frac{1}{2.2}$ or 0.455. 
 
 Based on simulated examples, recovery of $\beta$ appears to be more precise than that of $\gamma$. This may, however, be a result of simulation mechanics. For small population sizes, recovery of $\gamma$ was unreliable. However, population size did not affect the ability to accurately recover $\beta$.  
 
@@ -696,25 +698,15 @@ The infected dynamics are reconstructed by multiplying the reported cases at eac
 ####Non-Constant Reporting Rate
 In my previous explanation of susceptible reconstruction, I made a crucial assumption about the rate at which infected individuals are reported: I assumed that the reporting rate was constant across time. This assumption simplified the process of reconstructing susceptible and infected dynamics, but it rarely holds true in the world of real data. 
 
-As an example, let's look at measles data from pre-vaccination era New York City,  from 1920-1940 [@tycho]. Figure \ref{fig:Zlinear} is a graph of the reconstructed susceptible dynamics, obtained as previously described using global linear regression. It is evident from figure \ref{fig:Zlinear} that the Z dynamics suffer from local shifts away from the mean of zero. This indicates that the previously held assumption of constant reporting rate, $\rho$, has been violated. 
+As an example, let's look at measles data from pre-vaccination era New York City,  from 1920-1940 [@tycho]. In figure \ref{Zlocal}, plot (A) is a graph of the reconstructed susceptible dynamics, obtained as previously described using global linear regression. It is evident from plot (A) in figure \ref{Zlocal} that the Z dynamics suffer from local shifts away from the mean of zero. This indicates that the previously held assumption of constant reporting rate, $\rho$, has been violated. 
 
 
 
-```{r Zlinear, echo=FALSE, fig.cap="Plot of the reconstructed Z parameter for measles data in New York City from 1920-1940 using global linear regression, as described in the susceptible reconstruction section above."}
-
-newyork <- read_in_city("NEW YORK", naremove=FALSE)[[1]]
-
-scale_optim_ny <- 0.28 #from previous analysis 
-
-newyork <- local_regression(newyork, scale_optim_ny)
-
-ggplot(newyork, aes(x=number))+
-  geom_line(aes(y=newyork$Z_linear))+
-  labs(x="Biweek", y="Z Dynamics")
+```{r Zlinear, echo=FALSE, fig.cap="Plot of the reconstructed Z parameter for measles data in New York City from 1920-1940 using global linear regression, as described in the susceptible reconstruction section above. \\label{Zlinear}"}
 ```
 
 
-When local shifts in the mean of the Z dynamics are observed, such as those in Figure \ref{fig:Zlinear}, it indicates a nonconstant reporting rate. Following the work of Finkenstadt and Grenfell [@SRgrenfell], I addressed the issue of time-varying reporting rate by performing local linear regression with gaussian smoothers. To give an overview before I break down the process in detail, I split the data into overlapping chunks (or neighborhoods) centered around each $\{X_{i},...,X_{N}\}$, then assigned a gaussian weight to each observation in each neighborhood. Then I performed $N$ weighted linear regressions using the previously defined gaussian weights, and derived the value of $\rho$ for each time point by pulling the slope from each of these weighted linear regressions. 
+When local shifts in the mean of the Z dynamics are observed, such as those in plot (A) from Figure \ref{Zlocal}, it indicates a nonconstant reporting rate. Following the work of Finkenstadt and Grenfell [@SRgrenfell], I addressed the issue of time-varying reporting rate by performing local linear regression with gaussian smoothers. To give an overview before I break down the process in detail, I split the data into overlapping chunks (or neighborhoods) centered around each $\{X_{i},...,X_{N}\}$, then assigned a gaussian weight to each observation in each neighborhood. Then I performed $N$ weighted linear regressions using the previously defined gaussian weights, and derived the value of $\rho$ for each time point by pulling the slope from each of these weighted linear regressions. 
 
 To break it down, I began as I did in my previous Susceptible Reconstruction example by computing the cumulative cases, $X_{t}= \sum_{i=1}^{t}C_{i}$, and the cumulative births, $Y_{t}=\sum_{i=1}^{t} B_{i-d}$. I then split the data into neighborhoods. To do this, I defined a bandwidth, $h$ and a neighborhood size $m=T*h$ (where $T$ is the number of observations) such that for each $\{x_{t},...x_{T}\}$, a neighborhood was constructed consisting of the $m$ closest datapoints to the value of $x_{t}$. In this way, I constructed a matrix $X_{n}$ with $T$ rows and $m$ columns. I additionally constructed a corresponding $Y_{n}$ matrix. 
 
@@ -734,18 +726,29 @@ To pull this together with an example, if I were to look at the datapoint $x_{10
 
 Once I computed the gaussian weight for each datapoint in the $X_{n}$ matrix, I ran a weighted linear regression on each of the $T$ rows of the $X_{n}$ matrix, using the gaussian weights from the previously computed weight matrix. The result of this was $T$ simple linear regression outputs. It follows that $\rho_{t}$ is a vector of the slopes of these linear regressions. I obtained fitted values by imputting the focal x ($x_{0}$) into the linear model for each time point. I then took the residual of the regression and obtained the $Z$ dynamics from the local regression. 
 
-```{r LocalReg, echo=FALSE, fig.cap="Z dynamics from local linear regression versus global linear regression taken from New York data"}
-ggplot(newyork, aes(x=number))+
-  geom_line(aes(y=newyork$Z_linear))+
-  labs(x="Biweek", y="Z Dynamics (Linear Regression")
 
-ggplot(newyork, aes(x=number))+
-  geom_line(aes(y=newyork$Z_gaus))+
-  labs(x="Biweek", y="Z Dynamics (Local Regression)")
+```{r LocalReg, echo=FALSE, fig.cap="Comparison of reconstructed Z dynamics from the New York data. Plot (A) shows Z dynamics obtained via global linear regression. Plot (B) shows Z dynamics obtained via local linear regression. \\label{Zlocal}"}
+newyork <- read_in_city("NEW YORK", naremove=FALSE)[[1]]
+
+scale_optim_ny <- 0.28 #from previous analysis 
+
+newyork <- local_regression(newyork, scale_optim_ny)
+
+linearplot <- ggplot(newyork, aes(x=number))+
+                geom_line(aes(y=newyork$Z_linear))+
+                labs(x="Biweek", y="Z")+
+                geom_hline(aes(yintercept=0), linetype=3)
+
+localplot <- ggplot(newyork, aes(x=number))+
+                geom_line(aes(y=newyork$Z_gaus))+
+                labs(x="Biweek", y="Z")+
+                geom_hline(aes(yintercept=0), linetype=3)
+
+plot_grid(linearplot, localplot, labels=c("A", "B"), ncol = 1, nrow = 2)
 ```
 
 
-Figure \ref[fig:LocalReg] above 
+Figure \ref{Zlocal} above shows the difference
 
 \newpage
 #References
