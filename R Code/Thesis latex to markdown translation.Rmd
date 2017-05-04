@@ -710,13 +710,13 @@ When local shifts in the mean of the Z dynamics are observed, such as those in p
 
 To break it down, I began as I did in my previous Susceptible Reconstruction example by computing the cumulative cases, $X_{t}= \sum_{i=1}^{t}C_{i}$, and the cumulative births, $Y_{t}=\sum_{i=1}^{t} B_{i-d}$. I then split the data into neighborhoods. To do this, I defined a bandwidth, $h$ and a neighborhood size $m=T*h$ (where $T$ is the number of observations) such that for each $\{x_{t},...x_{T}\}$, a neighborhood was constructed consisting of the $m$ closest datapoints to the value of $x_{t}$. In this way, I constructed a matrix $X_{n}$ with $T$ rows and $m$ columns. I additionally constructed a corresponding $Y_{n}$ matrix. 
 
-I chose the bandwidth, $h$, in accordance with the method outlined by Finkenstadt and Grenfell [@SRgrenfell]. As Finkenstadt and Grenfell argued, automatic selection processes that minimize the residual to white noise are not suitable, as the residuals in the regression are significant. The method they proposed was to choose the bandwidth that minimized the difference between two sums of squares: the sum of square errors ($SSE_{1}(h)$ below), and the sum of squares of the deviations of the local estimator from the linear estimator ($SSE_{2}(h)$ below), where $h$ is the bandwidth using a guassian kernel. Essentially, their method chooses a bandwidth that both minimizes the SSE while preventing over smoothing by tethering the local regression to the estimator obtained from the global linear regression. In the equations that follow, $\hat{m}_{h,t}(x_{t})$ is the local estimator at point $x$ with smothing parameter $h$. 
+I chose the bandwidth, $h$, in accordance with the method outlined by Finkenstadt and Grenfell [@SRgrenfell]. As Finkenstadt and Grenfell argued, automatic selection processes that minimize the residual to white noise are not suitable, as the residuals in the regression are significant. The method they proposed was to choose the bandwidth that minimized the difference between two sums of squares: the sum of square errors ($SSE_{1}(h)$), and the sum of squares of the deviations of the local estimator from the linear estimator ($SSE_{2}(h)$), where $h$ is the bandwidth using a guassian kernel. Essentially, their method chooses a bandwidth that both minimizes the SSE while preventing over smoothing by tethering the local regression to the estimator obtained from the global linear regression. In the equations that follow, $\hat{m}_{h,t}(x_{t})$ is the local estimator at point $x$ with smothing parameter $h$. 
 
 \begin{equation}
-SSE_{1}(h) = \sum_{t=1}^{T}\{Y_{t}-\hat{m}_{h,t}(x_{t})}\}^2
+SSE_{1}(h) = \sum_{t=1}^{T}\{Y_{t}-\hat{m}_{h,t}(x_{t})\}^2
 \end{equation}
 \begin{equation}
-SSE_{2}(h) = \sum_{t=1}^{T}\{\hat{Y}_{t}-\hat{m}_{h,t}(x_{t})}\}^2
+SSE_{2}(h) = \sum_{t=1}^{T}\{\hat{Y}_{t}-\hat{m}_{h,t}(x_{t})\}^2
 \end{equation}
 
 In figure \ref{Zlocal} I reference data from the Tycho database [@tycho] for pre-vaccination measeles in New York City. The bandwidth that minimized the difference between $SSE_{1}$ and $SSE_{2}$ for this data was $h=0.28$. 
