@@ -27,7 +27,6 @@ library(locfit)
 ```
 
 ```{r Functions, include=FALSE}
-#possible error: city$___ might not work... try changing to city[[1]]$___. 
 Sim <- function(beta, pop, i.now, s.now, r.now, births) {
 
 results <- as.data.frame(matrix(c(i.now, s.now, r.now), nrow=1))
@@ -93,8 +92,8 @@ gaussian_sum <- function(i, m) {
 }
 
 gaussian_regression <- function(city, scale){
-  cumbirths <- cumsum(city[[1]]$rec)
-  cumcases <- as.numeric(cumsum(city[[1]]$cases))
+  cumbirths <- cumsum(city$rec)
+  cumcases <- as.numeric(cumsum(city$cases))
   
   ord <- order(cumcases)
   c.cases <- cumcases[ord] 
@@ -179,8 +178,8 @@ SSE <- function(y_hat, y){
 }
 
 linear_reconstruction <- function(city){
-  cumbirths <- cumsum(city[[1]]$rec)
-  cumcases <- as.numeric(cumsum(city[[1]]$cases))
+  cumbirths <- cumsum(city$rec)
+  cumcases <- as.numeric(cumsum(city$cases))
 
   regression_linear <- lm(cumbirths ~ cumcases) 
   Z_linear <- as.vector(resid(regression_linear))
@@ -189,23 +188,22 @@ linear_reconstruction <- function(city){
 }
 
 local_regression <- function(city, scale){
-  cumbirths <- cumsum(city[[1]]$rec)
-  cumcases <- as.numeric(cumsum(city[[1]]$cases))
+  cumbirths <- cumsum(city$rec)
+  cumcases <- as.numeric(cumsum(city$cases))
   
-  gaus_regression_S <- gaussian_regression(city=city, scale=scale)
-  gaus_regression_I <- gaussian_regression(city=city, scale=scale)
+  gaus_regression_ <- gaussian_regression(city=city, scale=scale)
 
-  city$Z_gaus <- cumbirths - gaus_regression_S$y.fit.gaus
-  city$I_gaus <- city$cases*gaus_regression_I$x.coeffs.gaus
+  city$Z_gaus <- cumbirths - gaus_regression_$y.fit.gaus
+  city$I_gaus <- city$cases*gaus_regression_$x.coeffs.gaus
   
   city$Z_linear <- linear_reconstruction(city)[[3]]
-  city$rho <- gaus_regression_I$x.coeffs.gaus
+  city$rho <- gaus_regression_$x.coeffs.gaus
   
   return(city)
 }
 
 SR_plot <- function(city, name){
-    ggplot(city[[1]], aes(x=number))+
+    ggplot(city, aes(x=number))+
               geom_line(aes(y=Z_gaus, col="Local Regression Estimate of Z")) +
               geom_line(aes(y=Z_linear, col="Linear Regression Estimate of Z"))+
               labs(x="Biweek", y="Z", title= name)
@@ -213,21 +211,21 @@ SR_plot <- function(city, name){
 }
 
 IR_plot <- function(city, name){
-  ggplot(city[[1]], aes(x=number)) +
+  ggplot(city, aes(x=number)) +
               geom_line(aes(y=cases, col="Reported Cases")) +
               geom_line(aes(y=I_gaus, col="Estimate of True Infecteds"))+
               labs(x="Biweek", y="Infecteds/Cases", title = name)
 }
 
 rho_plot <- function(city, name){
-  ggplot(city[[1]], aes(x=number)) +
+  ggplot(city, aes(x=number)) +
                 geom_line(aes(y=rho, col="rho"))+
                 labs(x="biweek", y="estimated rho", title = name)
 }
 
 optim_bandwidth <- function(city){
-  cumbirths <- cumsum(city[[1]]$rec)
-  cumcases <- as.numeric(cumsum(city[[1]]$cases))
+  cumbirths <- cumsum(city$rec)
+  cumcases <- as.numeric(cumsum(city$cases))
   
   h<- seq(0.05, 0.89, 0.01)
   SSE1_gaus <- c()
@@ -248,11 +246,6 @@ optim_bandwidth <- function(city){
   scale_optim_gaus <- h[SSE_optim_gaus]
 
   return(scale_optim_gaus)
-}
-
-bayes_data <- function(city){
-  return(list(N=length(city[[1]]$number), P=as.integer(city[[1]]$pop), I=as.integer(city[[1]]$I_gaus),
-              Z=as.integer(city[[1]]$Z_gaus), Zmin=as.integer(abs(min(city[[1]]$Z_gaus)))))
 }
 
 run_bayes <- function(city, which_stan){
@@ -721,12 +714,14 @@ As an example, let's look at measles data from pre-vaccination era New York City
 
 ```{r Zlinear, echo=FALSE, fig.cap="Plot of the reconstructed Z parameter for measles data in New York City from 1920-1940 using global linear regression, as described in the susceptible reconstruction section above."}
 
-newyork <- read_in_city("NEW YORK", naremove=FALSE)
+newyork <- read_in_city("NEW YORK", naremove=FALSE)[[1]]
 
-newyork_Z <- linear_reconstruction(newyork)[[3]]
+scale_optim_ny <- 0.28 #from previous analysis 
 
-ggplot(newyork[[1]], aes(x=number))+
-  geom_line(aes(y=newyork_Z))+
+newyork <- local_regression(newyork, scale_optim_ny)
+
+ggplot(newyork, aes(x=number))+
+  geom_line(aes(y=newyork$Z_linear))+
   labs(x="Biweek", y="Z Dynamics")
 ```
 \
@@ -749,7 +744,18 @@ In which $K(x)$ is the gaussian kernel function, and $w_{i}(x)$ gives the weight
 
 To pull this together with an example, if I were to look at the datapoint $x_{10}$ (the focal $x_t$ of the $10^{th}$ row of the $X_{n}$ matrix), I would first create a vector of length $m$ of the $x_{t}$'s nearest to $x_{10}$. I would then apply the weight function $w_{i}(x_{10})=\frac{K(\frac{x_{10}-x_{i}}{h})}{\sum_{i=1}^{m}K(\frac{x_{10}-x_{i}}{h})}$ to each of the $m$ $x_{t}$'s in the neighborhood of $x_{10}$. I repeated this for each row of the $X_{n}$ matrix, resulting in a weight matrix with the same dimensions of $X_{n}$. 
 
-Once I computed the gaussian weight for each datapoint in the $X_{n}$ matrix, I ran a weighted linear regression on each of the $T$ rows of the $X_{n}$ matrix, using the gaussian weights from the previously computed weight matrix. 
+Once I computed the gaussian weight for each datapoint in the $X_{n}$ matrix, I ran a weighted linear regression on each of the $T$ rows of the $X_{n}$ matrix, using the gaussian weights from the previously computed weight matrix. The result of this was $T$ simple linear regression outputs. It follows that $\rho_{t}$ is a vector of the slopes of these linear regressions. I obtained fitted values by imputting the focal x ($x_{0}$) into the linear model for each time point. I then took the residual of the regression and obtained the $Z$ dynamics from the local regression. 
+
+```{r LocalReg, echo=FALSE, fig.cap="Z dynamics from local linear regression versus global linear regression taken from New York data"}
+ggplot(newyork, aes(x=number))+
+  geom_line(aes(y=newyork$Z_linear))+
+  labs(x="Biweek", y="Z Dynamics (Linear Regression")
+
+ggplot(newyork, aes(x=number))+
+  geom_line(aes(y=newyork$Z_gaus))+
+  labs(x="Biweek", y="Z Dynamics (Local Regression)")
+```
+
 
 
 
