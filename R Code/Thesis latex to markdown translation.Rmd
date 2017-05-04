@@ -430,7 +430,7 @@ influenzaTest <- SIRsim(parameters,initial,time)
 ## Plotting
 plotSIR(influenzaTest)
 ```
-\
+
 
 \paragraph{Inference}
 I then ran inference on the simulated data to retrieve back the value of $\beta$. To do this, I first created a function that simulated data for a series of $\beta$ values ranging from 0 to 3 with a step of 0.01, maintaining the same initial conditions and $\gamma$ value as the initial simulation. This function created a data frame of results for each value of $\beta$. I then ran a sum of squares function and took the squared difference between the results of my original simulation and the results of my estimation function. A plot of the estimated $\beta$ values against the resulting sum of squares output is presented in figure \ref{fig:SIRndEST}. It is visually evident that the minimum of the function occurs at 1.66, the actual value of $\beta$ that I used to simulate my data. Running the optim function in R to minimize the sum of squares function returned the expected $\beta$ of 1.66. 
@@ -471,7 +471,7 @@ graphBetaEstimates <- function(matrix) { # takes matrix of betas and SSBeta
   betaMatrix <- estimateBeta(influenzaTest, 0, (1/2.2), initial, time)
 graphBetaEstimates(betaMatrix)
 ```
-\
+
 
 ##Stochastic
 
@@ -526,7 +526,7 @@ results <- Sim(beta=beta, n=n, i.now=i.now, s.now=s.now, r.now=r.now, time.steps
 #Plotting Simulation
 plot_sim(results)
 ```
-\
+
 
 To achieve the output in figure \ref{fig:ChainBinomSim}, I ran equations (4) through (6) through a loop for 25 time steps. I chose 25 time steps based on the length of the epidemic observed from running the example using a deterministic model. 
 
@@ -604,19 +604,7 @@ plot_likelihood(likelihood1)
 
 Unlike the classical approach, which treats model parameters as fixed values, Bayesian inference treats model parameters as random variables. The distribution of the parameters is calculated via Bayes' Theorem based on information given via a prior distribution and a likelihood computed based on the data. This final distribution is called the posterior distribution, and it gives all relevant information about the parameters, including point and interval estimates. The posterior distribution is defined more precisely in the equation below:
 
-\begin{figure}[htbp]
-\includegraphics[scale=.25, center]{ChainBinomBayesDensity.png}
-\caption{Plot of the posterior density functions for $\beta$ and $\gamma$ respectively}
-\label{fig:ChainBinomBayesDensity}
-\end{figure}
 
-
-\begin{figure}[htbp]
-\includegraphics[scale=.2, center]{ChainBinomBetaPosPriorPlot.png}
-\includegraphics[scale=.2, center]{ChainBinomGammaPosPriorPlot.png}
-\caption{Plot of the posterior density function plotted over the prior density function for $\beta$ and $\gamma$ respectively}
-\label{fig:ChainBinomPosPriorPlots}
-\end{figure}
 
 \begin{equation}
 P(\theta \mid y) = \frac{P(\theta)P(y \mid \theta)}{\int P(\theta)P(y \mid \theta) d\theta}
@@ -724,7 +712,7 @@ ggplot(newyork, aes(x=number))+
   geom_line(aes(y=newyork$Z_linear))+
   labs(x="Biweek", y="Z Dynamics")
 ```
-\
+
 
 When local shifts in the mean of the Z dynamics are observed, such as those in Figure \ref{fig:Zlinear}, it indicates a nonconstant reporting rate. Following the work of Finkenstadt and Grenfell [@SRgrenfell], I addressed the issue of time-varying reporting rate by performing local linear regression with gaussian smoothers. To give an overview before I break down the process in detail, I split the data into overlapping chunks (or neighborhoods) centered around each $\{X_{i},...,X_{N}\}$, then assigned a gaussian weight to each observation in each neighborhood. Then I performed $N$ weighted linear regressions using the previously defined gaussian weights, and derived the value of $\rho$ for each time point by pulling the slope from each of these weighted linear regressions. 
 
@@ -757,7 +745,7 @@ ggplot(newyork, aes(x=number))+
 ```
 
 
-
+Figure \ref[fig:LocalReg] above 
 
 \newpage
 #References
