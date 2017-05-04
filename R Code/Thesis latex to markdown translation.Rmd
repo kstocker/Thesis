@@ -731,10 +731,14 @@ ggplot(newyork[[1]], aes(x=number))+
 ```
 \
 
+When local shifts in the mean of the Z dynamics are observed, such as those in Figure \ref{fig:Zlinear}, it indicates a nonconstant reporting rate. Following the work of Finkenstadt and Grenfell [@SRgrenfell], I addressed the issue of time-varying reporting rate by performing local linear regression with gaussian smoothers. To give an overview before I break down the process in detail, I split the data into overlapping chunks (or neighborhoods) centered around each $\{X_{i},...,X_{N}\}$, then assigned a gaussian weight to each observation in each neighborhood. Then I performed $N$ weighted linear regressions using the previously defined gaussian weights, and derived the value of $\rho$ for each time point by pulling the slope from each of these weighted linear regressions. 
 
-In order to address the temporal variation in the rate at which cases are reported, it is necessary to perform localized linear regression. To do this, I will split the 
+To break it down, I began as I did in my previous Susceptible Reconstruction example by computing the cumulative cases, $X_{t}= \sum_{i=1}^{t}C_{i}$, and the cumulative births, $Y_{t}=\sum_{i=1}^{t} B_{i-d}$. I then split the data into neighborhoods. To do this, I defined a bandwidth, $h$ and a neighborhood size $m=T*h$ (where $T$ is the number of observations) such that for each $\{X_{t},...X_{T}\}$, a neighborhood was constructed consisting of the $m$ closest datapoints to the value of $X_{t}$. In this way, I constructed a matrix $X_{n}$ with $T$ rows and $m$ columns. I additionally constructed a corresponding $Y_{n}$ matrix. 
+
+
 
 \newpage
 #References
 [@KeelingBook]
 [@tycho]
+[@SRgrenfell]
