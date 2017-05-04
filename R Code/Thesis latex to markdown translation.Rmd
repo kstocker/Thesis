@@ -718,21 +718,18 @@ In my previous explanation of susceptible reconstruction, I made a crucial assum
 As an example, let's look at measles data from pre-vaccination era New York City,  from 1920-1940 [@tycho]. Figure \ref{fig:Zlinear} is a graph of the reconstructed susceptible dynamics, obtained as previously described using global linear regression. It is evident from figure \ref{fig:Zlinear} that the Z dynamics suffer from local shifts away from the mean of zero. This indicates that the previously held assumption of constant reporting rate, $\rho$, has been violated. 
 
 
-\begin{figure}[htbp]
-\includegraphics[scale=.5, center]{LinearZ_NY.png}
-\caption{Plot of the reconstructed $Z_{t}$ parameter for measles data in New York City from 1920-1940 using global linear regression, as described in the susceptible reconstruction section above.}
-\label{fig:Zlinear}
-\end{figure}
 
-```{r Zlinear, echo=FALSE, fig.cap="Plot of the reconstructed $Z_{t}$ parameter for measles data in New York City from 1920-1940 using global linear regression, as described in the susceptible reconstruction section above."}
+```{r Zlinear, echo=FALSE, fig.cap="Plot of the reconstructed Z parameter for measles data in New York City from 1920-1940 using global linear regression, as described in the susceptible reconstruction section above."}
 
 newyork <- read_in_city("NEW YORK", naremove=FALSE)
 
 newyork_Z <- linear_reconstruction(newyork)[[3]]
 
-
+ggplot(newyork[[1]], aes(x=number))+
+  geom_line(aes(y=newyork_Z))+
+  labs(x="Biweek", y="Z Dynamics")
 ```
-
+\
 
 
 In order to address the temporal variation in the rate at which cases are reported, it is necessary to perform localized linear regression. To do this, I will split the 
