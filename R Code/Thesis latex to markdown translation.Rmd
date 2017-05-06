@@ -763,6 +763,8 @@ Figure \ref{Zlocal} demonstrates graphically that the Z dynamics obtained throug
 
 To complete the reconstruction process, the infected dynamics are obtained by multiplying $\rho_{t}$ and by the reported cases. 
 
+\citep{tycho}
+
 \newpage
 #References
 [@KeelingBook]

@@ -740,6 +740,11 @@ stlouis <- fix_na(stlouis, m=c(69, 70), 68, 71)
 
 ```
 
+```{r}
+save(chicago_bayes, file="Chicago_Bayes")
+```
+
+
 To do (4/6/17):
 - write one page summary of my SR with seasonal rho's 
 - keep reading Jandarov and Haran paper on TSIR gravity model 
