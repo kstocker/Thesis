@@ -567,6 +567,13 @@ indianapolis_bayes <- run_bayes(indianapolis, which_stan = "high_pop")
 spokane_bayes <- run_bayes(spokane, which_stan = "high_pop") 
 ```
 
+```{r Load Saved Bayes Outputs, include=FALSE}
+load("~/Documents/Github/Thesis Git/R Code/Chicago_Bayes")
+
+
+```
+
+
 ```{r Check Accuracy, echo=FALSE}
 #New York: Betas look very accurate! 
 ny_accuracy <- accuracy_check(ny_betas, ny_bayes)
@@ -742,6 +749,8 @@ stlouis <- fix_na(stlouis, m=c(69, 70), 68, 71)
 
 ```{r}
 save(chicago_bayes, file="Chicago_Bayes")
+
+
 ```
 
 
