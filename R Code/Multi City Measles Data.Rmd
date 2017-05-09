@@ -12,25 +12,36 @@ library(locfit)
 ```
 
 ```{r Functions, include=FALSE}
-Sim <- function(beta, pop, i.now, s.now, r.now, births) {
+Sim <- function(beta, city, s_prop, plot) {
+  i.now <- city$cases[1] * city$rho[1]
+  s.now <- s_prop*city$pop[1]
+  r.now <- city$pop[1]-i.now-s.now
+  cases <- city$cases[1]
 
-results <- as.data.frame(matrix(c(i.now, s.now, r.now), nrow=1))
-names(results) <- c("I", "S", "R")
-  for(i in 1:545){
-    if(s.now*i.now >0){
-    n.now <- pop[i]
-    i.next <- beta[i]*(i.now^.975)*s.now/n.now
-    #i.next <- rnbinom(n=1, mu=beta[i]*(i.now^.975)*s.now/n.now, size=i.now) 
-    b.now <- births[i]
-    s.now <- s.now - i.next + b.now
-    r.now <- r.now + i.now
-    i.now <- i.next
-    #cases <- i.now/rho[i]
-    results <- rbind(results, c(i.now, s.now, r.now))
+  results <- as.data.frame(matrix(c(i.now, s.now, r.now, cases), nrow=1))
+  names(results) <- c("I", "S", "R", "Cases")
+    for(i in 1:545){
+     if(s.now*i.now >0){
+      n.now <- city$pop[i]
+      i.next <- beta[i]*(i.now^.975)*s.now/n.now
+      b.now <- city$rec[i]
+      s.now <- s.now - i.next + b.now
+      r.now <- r.now + i.now
+      i.now <- i.next
+      cases <- i.now/city$rho[i]
+  results <- rbind(results, c(i.now, s.now, r.now, cases))
     }
     else {break}
-  }
-return(results)
+    }
+  
+    sim_plot <- ggplot(city, aes(x=number))+
+               geom_line(aes(y=cases, col="Incidence Data"))+
+               geom_line(aes(y=results$Cases, col="Simulated Cases"))+
+               labs(x="Biweek", y="Number of Cases")
+    if(plot==TRUE){return(list(results, sim_plot))}
+    
+    if(plot==FALSE){return(results)}
+
 }
 
 read_in_city <- function(city_, naremove){
@@ -333,13 +344,14 @@ accuracy_check <- function(betas, bayes){
 
   
   lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+  median_Sbar <- quantile(Sbar, probs=.5, names=FALSE)
   uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
   
   #take difference of paper values and my estimates
   beta_resid <- beta_estimate - betas
   beta_percent_error <- beta_resid/betas
 
-return(list(containbeta_sr=containbeta_sr, beta_resid=summary(beta_resid), beta_percent_error=summary(beta_percent_error), beta_estimate = beta_estimate, sbar_lower = lowlim_Sbar, sbar_upper = uplim_Sbar))
+return(list(containbeta_sr=containbeta_sr, beta_resid=summary(beta_resid), beta_percent_error=summary(beta_percent_error), beta_estimate = beta_estimate, sbar_estimate=c(sbar_lower = lowlim_Sbar, sbar_median=median_Sbar, sbar_upper = uplim_Sbar)))
 }
 
 fix_na <- function(df, m, k, j){
@@ -630,6 +642,41 @@ ggplot(, aes(x=seq(1,26,1)))+
   labs(x="biweek", y="beta", title="Boston Beta Comparison")
 ```
 
+```{r Validating Model, echo=FALSE}
+ny_betas_est <- accuracy_check(ny_betas, ny_bayes)$beta_estimate
+ny_sbar_range <- accuracy_check(ny_betas, ny_bayes)$sbar_estimate
+
+
+
+
+```
+
+
+```{r Function Testing Center, eval=FALSE, include=FALSE}
+forward_sim <- function(city, betas, bayes){
+  beta_est <- accuracy_check(betas, bayes)$beta_estimate
+  sbar_range <- accuracy_check(betas, bayes)$sbar_estimate
+  
+  (ny_sbar_range[1] + newyork$Z_gaus[1])/newyork$pop[1]
+  (ny_sbar_range[3] + newyork$Z_gaus[1])/newyork$pop[1]
+  
+  _sim <- Sim(beta=rep_len(beta_est, length.out = 546), city=city, s_prop = s_prop, plot=FALSE)
+  
+ mean_square_error <- sum((_sim$Cases/city$pop-city$cases/city$pop)^2)
+   
+ }
+}
+
+NY_sim <- Sim(beta=rep_len(ny_betas_est, length.out = 546), city=newyork, s_prop=0.035, plot=TRUE)
+
+NY_sim[[2]]
+ggplot(NY_sim[[1]], aes(x=seq(1,length(I), 1)))+
+  geom_line(aes(y=newyork$cases, col="Data"))+
+  geom_line(aes(y=Cases, col="Sim Cases"))
+
+sum((NY_sim[[1]]$Cases/newyork$pop[1]-newyork$cases/newyork$pop[1])^2)
+```
+
 ```{r Checking out Data, eval=FALSE, include=FALSE}
 #Test for lowest and highest populations
 measles_<- measles %>%
@@ -665,10 +712,6 @@ measles_na <- measles_na %>%
 number_na <- as.vector(measles_na$number_na)
 names(number_na) <- as.vector(measles_na$loc)
 sort(number_na)
-```
-
-```{r Function Testing Center, eval=FALSE, include=FALSE}
-
 ```
 
 ```{NA Notes, eval=FALSE, include=FALSE}
