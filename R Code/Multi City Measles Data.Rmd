@@ -655,27 +655,34 @@ ny_sbar_range <- accuracy_check(ny_betas, ny_bayes)$sbar_estimate
 ```{r Function Testing Center, eval=FALSE, include=FALSE}
 forward_sim <- function(city, betas, bayes){
   beta_est <- accuracy_check(betas, bayes)$beta_estimate
-  sbar_range <- accuracy_check(betas, bayes)$sbar_estimate
   
-  (ny_sbar_range[1] + newyork$Z_gaus[1])/newyork$pop[1]
-  (ny_sbar_range[3] + newyork$Z_gaus[1])/newyork$pop[1]
+  s_prop <- seq(0.025, 0.05, 0.0001)#check with this interval, then bump it to 0.00001
   
-  _sim <- Sim(beta=rep_len(beta_est, length.out = 546), city=city, s_prop = s_prop, plot=FALSE)
+  x<-seq(1, length(s_prop), 1)
   
- mean_square_error <- sum((_sim$Cases/city$pop-city$cases/city$pop)^2)
-   
- }
+ mean_square_error <- sapply(x, function(x){
+  sim <- Sim(beta=rep_len(beta_est, length.out = 546), city=city, s_prop[x], 
+             plot=FALSE)
+  mean_square_error <- sum((sim$Cases/city$pop-city$cases/city$pop)^2)
+  return(mean_square_error)
 }
+)
+ return(list(mse=mean_square_error, s_prop=s_prop))
+ }
 
-NY_sim <- Sim(beta=rep_len(ny_betas_est, length.out = 546), city=newyork, s_prop=0.035, plot=TRUE)
+ny_mse <- forward_sim(newyork, ny_betas, ny_bayes)
+
+plot(ny_mse[[1]])
+which.min(ny_mse[[1]]) #138
+ny_mse[[2]][138] #s_prop = 0.0387
+
+NY_sim <- Sim(beta=rep_len(ny_betas_est, length.out = 546), city=newyork, s_prop=0.0387, plot=TRUE)
 
 NY_sim[[2]]
-ggplot(NY_sim[[1]], aes(x=seq(1,length(I), 1)))+
-  geom_line(aes(y=newyork$cases, col="Data"))+
-  geom_line(aes(y=Cases, col="Sim Cases"))
 
-sum((NY_sim[[1]]$Cases/newyork$pop[1]-newyork$cases/newyork$pop[1])^2)
+
 ```
+
 
 ```{r Checking out Data, eval=FALSE, include=FALSE}
 #Test for lowest and highest populations
