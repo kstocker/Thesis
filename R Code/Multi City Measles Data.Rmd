@@ -569,10 +569,8 @@ spokane_bayes <- run_bayes(spokane, which_stan = "high_pop")
 
 ```{r Load Saved Bayes Outputs, include=FALSE}
 load("~/Documents/Github/Thesis Git/R Code/Chicago_Bayes")
-
-
+load("~/Documents/Github/Thesis Git/R Code/NY_Bayes")
 ```
-
 
 ```{r Check Accuracy, echo=FALSE}
 #New York: Betas look very accurate! 
@@ -670,36 +668,7 @@ sort(number_na)
 ```
 
 ```{r Function Testing Center, eval=FALSE, include=FALSE}
-read_in_city_na <- function(city_){
 
-  df <- measles %>%
-  filter(year>1919 & year <1941) %>%
-  filter(loc == city_) %>%
-  select(biweek, year, cases, pop, rec) %>%
-  mutate(number = seq(1, 546, 1))
-  
-  nas <- which(is.na(df$cases))
-  
-  for(i in nas){
-    if(i==1 &((i+1) %in% nas)==FALSE){
-      df$cases[i] <- df$cases[i+1]
-    }
-     if(i==1 &((i+1) %in% nas)==TRUE){
-      df$cases[i] <- df$cases[i+1]
-    }
-    if(i!=1 & ((i-1) %in% nas)==FALSE{
-      df$cases[i] <- (df$cases[i-1]+df$cases[i+2])/2
-    }
-  }
-  
-  betas <- measles_betas %>%
-  filter(city == city_) %>%
-  select(contains("biweek"))
-  
-  betas <- unname(unlist(betas[1,]))
-  
-  return(list(df=df, betas=betas))
-}
 ```
 
 ```{NA Notes, eval=FALSE, include=FALSE}
@@ -747,8 +716,6 @@ stlouis <- fix_na(stlouis, m=c(69, 70), 68, 71)
 
 ```
 
-```{r}
-save(chicago_bayes, file="Chicago_Bayes")
 
 
 ```
