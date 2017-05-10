@@ -12,8 +12,8 @@ library(locfit)
 ```
 
 ```{r Functions, include=FALSE}
-Sim <- function(beta, city, s_prop, plot) {
-  i.now <- city$cases[1] * city$rho[1]
+Sim <- function(beta, city, s_prop, i_prop, plot) {
+  i.now <- i_prop*city$pop[1]
   s.now <- s_prop*city$pop[1]
   r.now <- city$pop[1]-i.now-s.now
   cases <- city$cases[1]
@@ -360,6 +360,23 @@ fix_na <- function(df, m, k, j){
   }
   return(df)
 }
+
+choose_s_init <- function(city, betas, bayes){
+  beta_est <- accuracy_check(betas, bayes)$beta_estimate
+  
+  s_prop <- seq(0.025, 0.05, 0.0001)#check with this interval, then bump it to 0.00001
+  
+  x<-seq(1, length(s_prop), 1)
+  
+ mean_square_error <- sapply(x, function(x){
+  sim <- Sim(beta=rep_len(beta_est, length.out = 546), city=city, s_prop[x], 
+             plot=FALSE)
+  mean_square_error <- sum((sim$Cases/city$pop-city$cases/city$pop)^2)
+  return(mean_square_error)
+}
+)
+ return(list(mse=mean_square_error, s_prop=s_prop))
+ }
 ```
 
 
@@ -653,33 +670,44 @@ ny_sbar_range <- accuracy_check(ny_betas, ny_bayes)$sbar_estimate
 
 
 ```{r Function Testing Center, eval=FALSE, include=FALSE}
-forward_sim <- function(city, betas, bayes){
+choose_sinit <- function(city, betas, bayes){
   beta_est <- accuracy_check(betas, bayes)$beta_estimate
   
-  s_prop <- seq(0.025, 0.05, 0.0001)#check with this interval, then bump it to 0.00001
+  s_prop <- seq(0.025, 0.05, 0.0001)#check with this interval, then bump it to   
+                                    #0.00001 
+  
+  i_prop <- seq(0, 0.001, length.out=length(s_prop))
   
   x<-seq(1, length(s_prop), 1)
   
- mean_square_error <- sapply(x, function(x){
-  sim <- Sim(beta=rep_len(beta_est, length.out = 546), city=city, s_prop[x], 
-             plot=FALSE)
-  mean_square_error <- sum((sim$Cases/city$pop-city$cases/city$pop)^2)
-  return(mean_square_error)
+  mse <- function(x,y){
+    sim <- Sim(beta=rep_len(beta_est, length.out = 546), city=city, 
+               s_prop=x, i_prop=y, plot=FALSE)
+    
+    mean_square_error_ <- sum((sim$Cases/city$pop-city$cases/city$pop)^2)
+    
+    return(mean_square_error_)
+  }
+  mean_square_error <- sapply(x, function(i) sapply(x, function(j) mse(s_prop[i], i_prop[j])))
+  
+  rownames(mean_square_error) <- sapply(1:length(i_prop), function(x) 
+    paste("I_prop", x))
+  
+  colnames(mean_square_error) <- sapply(1:length(s_prop), function(x) 
+    paste("S_prop", x))
+  
+  
+  return(list(mse=mean_square_error, s_prop=s_prop, i_prop=i_prop))
 }
-)
- return(list(mse=mean_square_error, s_prop=s_prop))
- }
+  
+ny_mse_matrix <- choose_sinit(newyork, ny_betas, ny_bayes)
 
-ny_mse <- forward_sim(newyork, ny_betas, ny_bayes)
+which.min(ny_mse_matrix$mse)
 
-plot(ny_mse[[1]])
-which.min(ny_mse[[1]]) #138
-ny_mse[[2]][138] #s_prop = 0.0387
+which(ny_mse_matrix$mse == min(ny_mse_matrix$mse), arr.ind = TRUE) #r=127, col=109
 
-NY_sim <- Sim(beta=rep_len(ny_betas_est, length.out = 546), city=newyork, s_prop=0.0387, plot=TRUE)
-
-NY_sim[[2]]
-
+ny_mse_matrix$i_prop[127]
+ny_mse_matrix$s_prop[109]
 
 ```
 
