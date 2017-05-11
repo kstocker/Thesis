@@ -581,11 +581,11 @@ chicago_bayes<- run_bayes(chicago, which_stan = "high_pop")
 
 boston_bayes <- run_bayes(boston, which_stan="high_pop") 
 
+baltimore_bayes <- run_bayes(baltimore, which_stan="high_pop") 
+
 phil_bayes <- run_bayes(phil, which_stan = "high_pop")  
 
 stlouis_bayes <- run_bayes(stlouis, which_stan="high_pop") 
-
-baltimore_bayes <- run_bayes(baltimore, which_stan="high_pop") 
 
 detroit_bayes <- run_bayes(detroit, which_stan="high_pop") 
 
@@ -599,6 +599,8 @@ spokane_bayes <- run_bayes(spokane, which_stan = "high_pop")
 ```{r Load Saved Bayes Outputs, include=FALSE}
 load("~/Documents/Github/Thesis Git/R Code/Chicago_Bayes")
 load("~/Documents/Github/Thesis Git/R Code/NY_Bayes")
+load("~/Documents/Github/Thesis Git/R Code/Baltimore_Bayes")
+load("~/Documents/Github/Thesis Git/R Code/Boston_Bayes")
 ```
 
 ```{r Check Accuracy, echo=FALSE}
@@ -663,7 +665,8 @@ ggplot(, aes(x=seq(1,26,1)))+
 ny_betas_est <- accuracy_check(ny_betas, ny_bayes)$beta_estimate
 ny_sbar_range <- accuracy_check(ny_betas, ny_bayes)$sbar_estimate
 
-
+save(baltimore_bayes, file="Baltimore_Bayes")
+save(boston_bayes, file="Boston_Bayes")
 
 
 ```
@@ -702,13 +705,17 @@ choose_sinit <- function(city, betas, bayes){
   
 ny_mse_matrix <- choose_sinit(newyork, ny_betas, ny_bayes)
 
-which.min(ny_mse_matrix$mse)
-
 which(ny_mse_matrix$mse == min(ny_mse_matrix$mse), arr.ind = TRUE) #r=127, col=109
+which(ny_mse_matrix$mse == min(ny_mse_matrix$mse), arr.ind = TRUE)
+quantile(ny_mse_matrix$mse, probs=.05)
 
 ny_mse_matrix$i_prop[127]
 ny_mse_matrix$s_prop[109]
+plot(ny_mse_matrix$mse)
 
+Sim(beta=rep_len(ny_betas_est, length.out = 546), city=newyork, 
+               s_prop=ny_mse_matrix$s_prop[109], i_prop=ny_mse_matrix$i_prop[127], 
+               plot=TRUE)[[2]]
 ```
 
 
