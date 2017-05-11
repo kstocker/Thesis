@@ -1,5 +1,5 @@
 ---
-title: 'Measles Data: Multi-City'
+title: 'Multi-City Measles Data'
 author: "Kaitlyn Stocker"
 date: "3/30/2017"
 output: html_document
@@ -107,7 +107,7 @@ gaussian_regression <- function(city, scale){
   for(i in 1:length(cumcases)){
   x0[i] <- c.cases[i] #set focal x 
   diffs[i,] <- abs(c.cases - x0[i]) #difference between each datapoint and x0 (x value difference)
-  which.diff[i] <- sort(diffs[i,])[m] #This returns the mth smallest difference between c.births and x0. 
+  which.diff[i] <- sort(diffs[i,])[m] #This returns the mth smallest difference between c.births (did I mean c.cases? I must have.) and x0. 
 
   if(length(c.cases[diffs[i,] <= which.diff[i]])<m){
     x.n[i,] <- c(c.cases[diffs[i,] <= which.diff[i]], rep(0, length.out=(m-length(c.cases[diffs[i,] <= which.diff[i]])))) #select m closest x values to focal x
@@ -376,7 +376,37 @@ choose_s_init <- function(city, betas, bayes){
 }
 )
  return(list(mse=mean_square_error, s_prop=s_prop))
- }
+}
+
+choose_initials <- function(city, betas, bayes){
+  beta_est <- accuracy_check(betas, bayes)$beta_estimate
+  
+  s_prop <- seq(0.025, 0.05, 0.00025)#check with this interval, then bump it to   
+                                    #0.00001 
+  
+  i_prop <- seq(0, 0.001, length.out=length(s_prop))
+  
+  x<-seq(1, length(s_prop), 1)
+  
+  mse <- function(x,y){
+    sim <- Sim(beta=rep_len(beta_est, length.out = 546), city=city, 
+               s_prop=x, i_prop=y, plot=FALSE)
+    
+    mean_square_error_ <- sum((sim$Cases/city$pop-city$cases/city$pop)^2)
+    
+    return(mean_square_error_)
+  }
+  mean_square_error <- sapply(x, function(i) sapply(x, function(j) mse(s_prop[i], i_prop[j])))
+  
+  rownames(mean_square_error) <- sapply(1:length(i_prop), function(x) 
+    paste("I_prop", x))
+  
+  colnames(mean_square_error) <- sapply(1:length(s_prop), function(x) 
+    paste("S_prop", x))
+  
+  
+  return(list(mse=mean_square_error, s_prop=s_prop, i_prop=i_prop))
+}
 ```
 
 
@@ -594,10 +624,10 @@ spokane_bayes <- run_bayes(spokane, which_stan = "high_pop")
 ```
 
 ```{r Load Saved Bayes Outputs, include=FALSE}
-load("~/Documents/Github/Thesis Git/R Code/Chicago_Bayes")
-load("~/Documents/Github/Thesis Git/R Code/NY_Bayes")
-load("~/Documents/Github/Thesis Git/R Code/Baltimore_Bayes")
-load("~/Documents/Github/Thesis Git/R Code/Boston_Bayes")
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/Chicago_Bayes")
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/NY_Bayes")
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/Baltimore_Bayes")
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/Boston_Bayes")
 ```
 
 ```{r Check Accuracy, echo=FALSE}
@@ -635,76 +665,71 @@ ggplot(, aes(x=seq(1,26,1)))+
   labs(x="biweek", y="beta", title="Baltimore Beta Comparison")
 
 
-#Philly:
-phil_accuracy <- accuracy_check(phil_betas, phil_bayes)
-
-ggplot(, aes(x=seq(1,26,1)))+
-  geom_point(aes(y=phil_accuracy$beta_estimate, col="Estimated Betas"))+
-  geom_point(aes(y=phil_betas, col="Paper Betas"))+
-  labs(x="biweek", y="beta", title="Philadelphia Beta Comparison")
-
-
-#St Louis:
-stlouis_accuracy <- accuracy_check(stlouis_betas, stlouis_bayes)
-
-ggplot(, aes(x=seq(1,26,1)))+
-  geom_point(aes(y=stlouis_accuracy$beta_estimate, col="Estimated Betas"))+
-  geom_point(aes(y=stlouis_betas, col="Paper Betas"))+
-  labs(x="biweek", y="beta", title="St Louis Beta Comparison")
-
-#Spokane:
-spokane_accuracy <- accuracy_check(spokane_betas, spokane_bayes)
-
-ggplot(, aes(x=seq(1,26,1)))+
-  geom_point(aes(y=spokane_accuracy$beta_estimate, col="Estimated Betas"))+
-  geom_point(aes(y=spokane_betas, col="Paper Betas"))+
-  labs(x="biweek", y="beta", title="Boston Beta Comparison")
+# #Philly:
+# phil_accuracy <- accuracy_check(phil_betas, phil_bayes)
+# 
+# ggplot(, aes(x=seq(1,26,1)))+
+#   geom_point(aes(y=phil_accuracy$beta_estimate, col="Estimated Betas"))+
+#   geom_point(aes(y=phil_betas, col="Paper Betas"))+
+#   labs(x="biweek", y="beta", title="Philadelphia Beta Comparison")
+# 
+# 
+# #St Louis:
+# stlouis_accuracy <- accuracy_check(stlouis_betas, stlouis_bayes)
+# 
+# ggplot(, aes(x=seq(1,26,1)))+
+#   geom_point(aes(y=stlouis_accuracy$beta_estimate, col="Estimated Betas"))+
+#   geom_point(aes(y=stlouis_betas, col="Paper Betas"))+
+#   labs(x="biweek", y="beta", title="St Louis Beta Comparison")
+# 
+# #Spokane:
+# spokane_accuracy <- accuracy_check(spokane_betas, spokane_bayes)
+# 
+# ggplot(, aes(x=seq(1,26,1)))+
+#   geom_point(aes(y=spokane_accuracy$beta_estimate, col="Estimated Betas"))+
+#   geom_point(aes(y=spokane_betas, col="Paper Betas"))+
+#   labs(x="biweek", y="beta", title="Boston Beta Comparison")
 ```
 
 ```{r Validating Model, echo=FALSE}
-ny_betas_est <- accuracy_check(ny_betas, ny_bayes)$beta_estimate
-ny_sbar_range <- accuracy_check(ny_betas, ny_bayes)$sbar_estimate
+#New York
+paste("New York Model")
+#ny_initials <- choose_initials(newyork, ny_betas, ny_bayes)
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/ny_initials")
+ny_initials <- ny_mse_matrix
+rm(ny_mse_matrix)
+#which(ny_initials$mse == min(ny_initials$mse), arr.ind = TRUE) #r=127, col=109
+ny_initials$i_prop[127]
+ny_initials$s_prop[109]
+Sim(beta=rep_len(ny_accuracy$beta_estimate, length.out = 546), city=newyork, 
+               s_prop=ny_initials$s_prop[109], ny_initials$i_prop[127], 
+               plot=TRUE)[[2]]
 
-
-
+#Chicago
+paste("Chicago Model")
+#chicago_initials <- choose_initials(chicago, chicago_betas, chicago_bayes)
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/chicago_initials")
+#which(chicago_initials$mse == min(chicago_initials$mse), arr.ind = TRUE) #r=43, col=38
+chicago_initials$i_prop[43]
+chicago_initials$s_prop[38]
+Sim(beta=rep_len(chicago_accuracy$beta_estimate, length.out = 546), city=chicago, 
+               s_prop=chicago_initials$s_prop[38], chicago_initials$i_prop[43], 
+               plot=TRUE)[[2]]
 ```
 
 
 ```{r Function Testing Center, eval=FALSE, include=FALSE}
-choose_sinit <- function(city, betas, bayes){
-  beta_est <- accuracy_check(betas, bayes)$beta_estimate
-  
-  s_prop <- seq(0.025, 0.05, 0.0001)#check with this interval, then bump it to   
-                                    #0.00001 
-  
-  i_prop <- seq(0, 0.001, length.out=length(s_prop))
-  
-  x<-seq(1, length(s_prop), 1)
-  
-  mse <- function(x,y){
-    sim <- Sim(beta=rep_len(beta_est, length.out = 546), city=city, 
-               s_prop=x, i_prop=y, plot=FALSE)
-    
-    mean_square_error_ <- sum((sim$Cases/city$pop-city$cases/city$pop)^2)
-    
-    return(mean_square_error_)
-  }
-  mean_square_error <- sapply(x, function(i) sapply(x, function(j) mse(s_prop[i], i_prop[j])))
-  
-  rownames(mean_square_error) <- sapply(1:length(i_prop), function(x) 
-    paste("I_prop", x))
-  
-  colnames(mean_square_error) <- sapply(1:length(s_prop), function(x) 
-    paste("S_prop", x))
-  
-  
-  return(list(mse=mean_square_error, s_prop=s_prop, i_prop=i_prop))
-}
-  
+start <- Sys.time()
+chicago_initials <- choose_initials(chicago, chicago_betas, chicago_bayes)
+Sys.time() - start
+rm(start)
+
+
+
+
 ny_mse_matrix <- choose_sinit(newyork, ny_betas, ny_bayes)
 
 which(ny_mse_matrix$mse == min(ny_mse_matrix$mse), arr.ind = TRUE) #r=127, col=109
-which(ny_mse_matrix$mse == min(ny_mse_matrix$mse), arr.ind = TRUE)
 quantile(ny_mse_matrix$mse, probs=.05)
 
 ny_mse_matrix$i_prop[127]
@@ -801,30 +826,6 @@ stlouis <- fix_na(stlouis, m=c(69, 70), 68, 71)
 
 
 
-```
 
-
-To do (4/6/17):
-- write one page summary of my SR with seasonal rho's 
-- keep reading Jandarov and Haran paper on TSIR gravity model 
-- troubleshoot bayes issues (phil, boston, stlouis, etc)
-  - anything common between them? (check: paper betas, population, SR and IR graphs)
-  - priors on beta and sbar - can they be more general? try to find problem 
-- add names of graphs to graphing functions 
-- add new code to deal with NA's 
-  - see if ignoring NA's in cumsum functions fixes the problem, or if greater problems persist     (make sure to remove from both births and cases for same datapoint)
-- Does switching the cumbirths and cumcases in the regression make a difference? maybe try to regress the other way 
-
-
-
-
-
-Questions for Dr Haran 4/6/17:
-
-- what is the best way to deal with NA's? I don't want to delete them because it will shift my biweeks, and there is no "na.rm" or other option in the cumsum function, which is necessary to reconstruction. For cities with strings of only 1 NA in a row, I took the average of the value before and after it to fill it in - is this an okay thing to do? Feels fudgy but I don't feel like it should impact analysis 
-
-  - if I remove NA's or ignore NA cases when computing cumulative sums, should I also exclude the birth data at those times so that cumulative births and cumulative cases are in line with one another? 
-  
-- some cities run fine through everything, and some come up with errors for bayes. I haven't been able to troubleshoot what the matter is yet. 
 
 

@@ -1,0 +1,445 @@
+---
+title: "Local Regression Algorithm for Non-Constant Reporting Rates in Epidemic Dynamics"
+author: "Kaitlyn Stocker"
+date: "5/11/2017"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: FALSE
+    number_sections: FALSE
+    fig_caption: true
+bibliography: /Users/Kaitlyn/Documents/Github/Thesis Git/Bibliography.bib
+---
+```{r Libraries, include=FALSE}
+library(deSolve)
+library(dplyr)
+library(rstan)
+library(locfit)
+library(gridExtra)
+library(cowplot)
+```
+
+```{r Functions, include=FALSE}
+Sim <- function(beta, pop, i.now, s.now, r.now, births) {
+
+results <- as.data.frame(matrix(c(i.now, s.now, r.now), nrow=1))
+names(results) <- c("I", "S", "R")
+  for(i in 1:545){
+    if(s.now*i.now >0){
+    n.now <- pop[i]
+    i.next <- beta[i]*(i.now^.975)*s.now/n.now
+    #i.next <- rnbinom(n=1, mu=beta[i]*(i.now^.975)*s.now/n.now, size=i.now) 
+    b.now <- births[i]
+    s.now <- s.now - i.next + b.now
+    r.now <- r.now + i.now
+    i.now <- i.next
+    #cases <- i.now/rho[i]
+    results <- rbind(results, c(i.now, s.now, r.now))
+    }
+    else {break}
+  }
+return(results)
+}
+
+read_in_city <- function(city_, naremove){
+
+  df <- measles %>%
+  filter(year>1919 & year <1941) %>%
+  filter(loc == city_) %>%
+  select(biweek, year, cases, pop, rec) %>%
+  mutate(number = seq(1, 546, 1))
+  
+  if(naremove==TRUE){
+  for(i in 1:nrow(df)){
+    if(is.na(df$cases[i])==TRUE){
+      df$cases[i] <- (df$cases[i-1]+df$cases[i+2])/2
+    }
+  }
+  }
+  
+  for(i in 1:nrow(df)){
+    if(is.na(df$cases[i])==FALSE & df$cases[i]==0){
+      df$cases[i]<-0.5
+    }
+  }
+  
+  betas <- measles_betas %>%
+  filter(city == city_) %>%
+  select(contains("biweek"))
+  
+  betas <- unname(unlist(betas[1,]))
+  
+  return(list(df=df, betas=betas))
+} #pass city as character
+
+gaussian_kernel <- function(x) {
+  (1/sqrt(2*pi))*exp(-x^2/2)
+}
+
+gaussian_sum <- function(i, m) {
+  gaussian_sum <- 0
+  for(k in 1:m){
+      gaussian_sum <- sum(gaussian_kernel((x.n[i,k]-x0[i])/which.diff[i]))
+      return(gaussian_sum)
+    }
+}
+
+gaussian_regression <- function(city, scale){
+  cumbirths <- cumsum(city$rec)
+  cumcases <- as.numeric(cumsum(city$cases))
+  
+  ord <- order(cumcases)
+  c.cases <- cumcases[ord] 
+  c.births <- cumbirths[ord] 
+
+  m <- floor(length(cumcases)*(scale)) #SCALE GOES HERE
+  h <- m/2
+
+  x0<-0
+  diffs<-matrix(nrow=length(cumcases), ncol=length(cumcases))
+  which.diff<-0
+  x.n <- matrix(nrow=length(cumcases), ncol=m)
+  y.n <- matrix(nrow=length(cumcases), ncol=m)
+
+  for(i in 1:length(cumcases)){
+  x0[i] <- c.cases[i] #set focal x 
+  diffs[i,] <- abs(c.cases - x0[i]) #difference between each datapoint and x0 (x value difference)
+  which.diff[i] <- sort(diffs[i,])[m] #This returns the mth smallest difference between c.births and x0. 
+
+  if(length(c.cases[diffs[i,] <= which.diff[i]])<m){
+    x.n[i,] <- c(c.cases[diffs[i,] <= which.diff[i]], rep(0, length.out=(m-length(c.cases[diffs[i,] <= which.diff[i]])))) #select m closest x values to focal x
+  y.n[i,] <- c(c.births[diffs[i,] <= which.diff[i]], 0) #select m closest corresponding y valeus 
+  }
+  else{
+  x.n[i,] <- head(c.cases[diffs[i,] <= which.diff[i]], m) #select m closest x values to focal x
+  y.n[i,] <- head(c.births[diffs[i,] <= which.diff[i]], m) #select m closest corresponding y valeus 
+  }
+  }
+  
+
+gaussian_kernel <- function(x) {
+  (1/sqrt(2*pi))*exp(-x^2/2)
+}
+
+gaussian_sum <- function(i, m) {
+  gaussian_sum <- 0
+  for(k in 1:m){
+      gaussian_sum <- sum(gaussian_kernel((x.n[i,k]-x0[i])/which.diff[i]))
+      return(gaussian_sum)
+    }
+}
+  
+  x.wt.gaus <- matrix(nrow=length(cumcases), ncol=m)
+  x.coeffs.gaus <- 0
+  for(i in 1:length(cumcases)){
+    for(k in 1:m){
+  x.wt.gaus[i,k]<- gaussian_kernel(x=(x.n[i,k] - x0[i])/which.diff[i])/gaussian_sum(i,m)
+  }
+  }
+  
+  reg.gaus <- lapply(1:length(cumcases), function(x) lm(y.n[x,]~x.n[x,], weights = x.wt.gaus[x,]))
+
+  x.coeffs.gaus <-0
+  x.intercept.gaus <-0
+  y.fit.gaus <- 0
+  for(i in 1:length(reg.gaus)){
+    x.coeffs.gaus[i] <- as.numeric(coef(reg.gaus[[i]])[2])
+    x.intercept.gaus[i] <- as.numeric(coef(reg.gaus[[i]])[1])
+    y.fit.gaus[i] <- x.coeffs.gaus[i]*c.cases[i]+x.intercept.gaus[i]
+  }
+
+T <- seq(1, 546, 1)  
+x.coeffs.gaus.smooth <- fitted(loess(x.coeffs.gaus ~ T))
+y.fit.gaus.smooth <-0
+for(i in 1:length(x.coeffs.gaus.smooth)){
+  y.fit.gaus.smooth[i] <- x.coeffs.gaus.smooth[i]*c.cases[i] + x.intercept.gaus[i]
+}
+
+return(list(y.fit.gaus=y.fit.gaus, y.fit.gaus.smooth=y.fit.gaus.smooth, x.coeffs.gaus=x.coeffs.gaus, x.coeffs.gaus.smooth=x.coeffs.gaus.smooth))
+}
+
+y_hat_linear <- function(x,y){
+  as.numeric(fitted(lm(y~x)))
+}
+
+SSE <- function(y_hat, y){
+  SSE<-0
+  for(i in seq_along(y)){
+  SSE <- sum((y[i]- y_hat[i])^2)
+  return(SSE)
+  }
+}
+
+linear_reconstruction <- function(city){
+  cumbirths <- cumsum(city$rec)
+  cumcases <- as.numeric(cumsum(city$cases))
+
+  regression_linear <- lm(cumbirths ~ cumcases) 
+  Z_linear <- as.vector(resid(regression_linear))
+  
+  return(list(cumbirths, cumcases, Z_linear))
+}
+
+local_regression <- function(city, scale){
+  cumbirths <- cumsum(city$rec)
+  cumcases <- as.numeric(cumsum(city$cases))
+  
+  gaus_regression_ <- gaussian_regression(city=city, scale=scale)
+
+  city$Z_gaus <- cumbirths - gaus_regression_$y.fit.gaus
+  city$I_gaus <- city$cases*gaus_regression_$x.coeffs.gaus
+  
+  city$Z_linear <- linear_reconstruction(city)[[3]]
+  city$rho <- gaus_regression_$x.coeffs.gaus
+  
+  return(city)
+}
+
+SR_plot <- function(city, name){
+    ggplot(city, aes(x=number))+
+              geom_line(aes(y=Z_gaus, col="Local Regression Estimate of Z")) +
+              geom_line(aes(y=Z_linear, col="Linear Regression Estimate of Z"))+
+              labs(x="Biweek", y="Z", title= name)
+
+}
+
+IR_plot <- function(city, name){
+  ggplot(city, aes(x=number)) +
+              geom_line(aes(y=cases, col="Reported Cases")) +
+              geom_line(aes(y=I_gaus, col="Estimate of True Infecteds"))+
+              labs(x="Biweek", y="Infecteds/Cases", title = name)
+}
+
+rho_plot <- function(city, name){
+  ggplot(city, aes(x=number)) +
+                geom_line(aes(y=rho, col="rho"))+
+                labs(x="biweek", y="estimated rho", title = name)
+}
+
+optim_bandwidth <- function(city){
+  cumbirths <- cumsum(city$rec)
+  cumcases <- as.numeric(cumsum(city$cases))
+  
+  h<- seq(0.05, 0.89, 0.01)
+  SSE1_gaus <- c()
+  for(i in seq_along(h)){
+    if(SSE(y=cumbirths, y_hat=gaussian_regression(city=city, scale=h[i])[[1]]))
+    SSE1_gaus[i] <- SSE(y=cumbirths, y_hat=gaussian_regression(city=city, scale=h[i])[[1]])
+  }
+
+  SSE2_gaus <- c()
+  for(i in seq_along(h)){
+    SSE2_gaus[i] <- SSE(y=y_hat_linear(x=cumcases, y=cumbirths), 
+                        y_hat=gaussian_regression(city=city, scale=h[i])[[1]])
+  }
+
+  SSE_optim_gaus <- which.min(abs(SSE1_gaus-SSE2_gaus)) #Find where SSE1 and SSE2 intersect
+
+  #Select Optimum scale value
+  scale_optim_gaus <- h[SSE_optim_gaus]
+
+  return(scale_optim_gaus)
+}
+
+run_bayes <- function(city, which_stan){
+  data <- list(N=length(city$number), P=as.integer(city$pop), I=as.integer(city$I_gaus),
+              Z=as.integer(city$Z_gaus), Zmin=as.integer(abs(min(city$Z_gaus))))
+  
+Stan_z_mod <- as.character("
+data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+	int <lower=0> I[N]; // infecteds
+	int  Z[N]; // Zt
+  int <lower=0> Zmin;
+}
+
+parameters {
+  real <lower=Zmin, upper= P[N]> Sbar;
+	real<lower=5, upper=100> beta[26];
+}
+
+model {
+	//priors
+  Sbar ~ normal(Zmin, P[1]/10);
+	beta[26] ~ gamma(7,5);
+
+	//likelihood
+	for (n in 2:N){
+  I[n] ~ neg_binomial_2(beta[n%26+1]*(I[n-1]^.975)*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+  }
+}    ") 
+
+
+Stan_z_mod_low_pop <- as.character("
+data {
+	int<lower=1> N; // time steps
+  real P[N]; //population size
+	int <lower=0> I[N]; // infecteds
+	int  Z[N]; // Zt
+  int <lower=0> Zmin;
+}
+
+parameters {
+  real <lower=Zmin, upper= P[N]> Sbar;
+	real<lower=0, upper=200> beta[26];
+}
+
+model {
+	//priors
+  Sbar ~ normal(P[1]/10, P[1]/10);
+	beta[26] ~ gamma(10,4);
+
+	//likelihood
+	for (n in 2:N){
+  I[n] ~ neg_binomial_2(beta[n%26+1]*(I[n-1]^.975)*(Z[n-1]+Sbar)/P[n-1], I[n-1]);
+  }
+}    ") 
+
+if(which_stan == "low_pop"){
+bayes_z <- stan(model_code = Stan_z_mod_low_pop, data=data, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
+}
+
+if(which_stan == "high_pop"){
+  bayes_z <- stan(model_code = Stan_z_mod, data=data, iter=500000, chains=4, pars=c("beta", "Sbar"), include=TRUE)
+}
+
+else{bayes_z <- "error: which_stan"}
+return(bayes_z)
+}
+
+accuracy_check <- function(betas, bayes){
+  betas_bayes <- extract(bayes, permuted=TRUE)
+  beta_ <- betas_bayes$beta
+  Sbar <- betas_bayes$Sbar
+  
+  beta<- matrix(nrow=1000000, ncol=26)
+  for(i in 2:27){
+    beta[,i-1] <- beta_[,i%%26+1]
+  }
+  
+  lowlimbeta_sr <- c()
+  uplimbeta_sr <- c()
+  containbeta_sr <- c()
+  for(i in 1:26){lowlimbeta_sr[i] <- quantile(beta[,i], probs=.025, names=FALSE)
+                uplimbeta_sr[i] <- quantile(beta[,i], probs=.975, names =FALSE)
+                containbeta_sr[i]<- ifelse(lowlimbeta_sr[i] <= betas[i] & uplimbeta_sr[i] 
+                                           >=betas[i], 1, 0)
+  }
+
+
+  beta_estimate <- c()
+  for(i in 1:26){
+    beta_estimate[i] <- quantile(beta[,i], probs=.5, names = FALSE)
+  }
+
+  
+  lowlim_Sbar <- quantile(Sbar, probs=.025, names=FALSE)
+  uplim_Sbar <- quantile(Sbar, probs=.975, names=FALSE)
+  
+  #take difference of paper values and my estimates
+  beta_resid <- beta_estimate - betas
+  beta_percent_error <- beta_resid/betas
+
+return(list(containbeta_sr=containbeta_sr, beta_resid=summary(beta_resid), beta_percent_error=summary(beta_percent_error), beta_estimate = beta_estimate, sbar_lower = lowlim_Sbar, sbar_upper = uplim_Sbar))
+}
+
+fix_na <- function(df, m, k, j){
+  for(i in 1:length(m)){
+  df$cases[m[i]] <- (df$cases[k] + df$cases[j])/2
+  }
+  return(df)
+}
+```
+
+```{r Read Data, include=FALSE}
+#Read in Measles Data from Tycho Paper 
+measles <- read.csv(file = "/Users/Kaitlyn/Documents/Thesis Work /Datasets/measlesUKUS.csv", header=TRUE, stringsAsFactors = FALSE)
+
+measles_betas <- read.csv(file = "/Users/Kaitlyn/Documents/Thesis Work /Datasets/measeles biweekly betas.csv", header=TRUE, stringsAsFactors=FALSE)
+```
+
+
+#Introduction:
+In my previous work on susceptible reconstruction, I made a crucial assumption about the rate at which infected individuals are reported: I assumed that the reporting rate was constant across time. Under the assumption of constant reporting rate, reconstructing the susceptible dynamics can be accomplished via global linear regression. This assumption simplified the process of reconstructing susceptible and infected dynamics, but it rarely holds true in the world of real data. 
+
+As an example, let's look at measles data from pre-vaccination era New York City,  from 1920-1940 [@tycho]. In figure \ref{Zlocal}A is a graph of the reconstructed susceptible dynamics, obtained as previously described using global linear regression. It is evident from figure \ref{Zlocal}A that the Z dynamics suffer from local shifts away from the mean of zero. This indicates that the previously held assumption of constant reporting rate, $\rho$, has been violated. 
+
+
+```{r LocalReg, echo=FALSE, fig.cap="Comparison of reconstructed Z dynamics from the New York data. Plot (A) shows Z dynamics obtained via global linear regression. Plot (B) shows Z dynamics obtained via local linear regression. \\label{Zlocal}"}
+newyork <- read_in_city("NEW YORK", naremove=FALSE)[[1]]
+
+scale_optim_ny <- 0.28 #from previous analysis 
+
+newyork <- local_regression(newyork, scale_optim_ny)
+
+linearplot <- ggplot(newyork, aes(x=number))+
+                geom_line(aes(y=newyork$Z_linear))+
+                labs(x="Biweek", y="Z")+
+                geom_hline(aes(yintercept=0), linetype=3)
+
+localplot <- ggplot(newyork, aes(x=number))+
+                geom_line(aes(y=newyork$Z_gaus))+
+                labs(x="Biweek", y="Z")+
+                geom_hline(aes(yintercept=0), linetype=3)
+
+plot_grid(linearplot, localplot, labels=c("A", "B"), ncol = 1, nrow = 2)
+```
+
+
+When local shifts in the mean of the Z dynamics are observed, such as those in Figure \ref{Zlocal}A, it indicates a nonconstant reporting rate. Following the work of Finkenstadt and Grenfell [@SRgrenfell], I addressed the issue of time-varying reporting rate by performing local linear regression with gaussian smoothers. To give an overview before I break down the process in detail, I split the data into overlapping chunks (or neighborhoods) centered around each $\{X_{t},...,X_{T}\}$, then assigned a gaussian weight to each observation in each neighborhood. Then I performed $T$ weighted linear regressions using the previously defined gaussian weights, and derived the value of $\rho$ for each time point by pulling the slope from each of these weighted linear regressions. 
+
+For the sake of simplicity as I continue, I will use the following notation: 
+    -$\{C_{t},...,C_{T}\}$ for the reported cases at each biweekly timepoint, $t$. 
+    -$\{B_{t},...,B_{T}\}$ for the number of births at each timepoint, $t$.
+
+Note that in this example, I will be performing a local regression in which the cumulative cases is the predictor and the cumulative births is the response. It is possible to perform the regression with cumulative births as the predictor and cumulative cases as the response, as in the work of Bjornstad et. al (2016).
+
+#Algorithm
+
+##Step 1: Define the Local Regression Function
+Begin by defining a function with one parameter, $scale$, which should be a value between 0 and 1. You can also add a $data$ parameter if you want to create a general case for use with different sets of epidemic data. 
+
+Compute $\sum_{t=1}^{T}C_{t}$ and $\sum_{t=1}^{T}B_{t}$, which I will call c.cases and c.births respectively. In this example, c.cases will be the predictor ($X$) and c.births will be the response ($Y$). 
+
+##Step 2: Define the Neighborhoods 
+Define a variable $m$ to be $T*scale$. Make sure that $m$ is an integer value, as it is the varibale that defines the number of observations in each neighborhood. 
+
+Next, we want to select the $m$ closest observations to each $X_{t}$. The goal here is to create a matrix, $x.n$, with $T$ rows and $m$ columns, for which each row is a neighborhood of size $m$. The focal $X$ for the $t^{th}$ row of $x.n$ will be $c.cases_{t}$. We will also construct a corresponding $y.n$ matrix, with the same dimensions as $x.n$, that will contain corresponding values from $c.births$. 
+
+To do this, begin by intializing the $x.n$ and $y.n$ matrices. Additionally, initialize the variables $x.focal$ and $which.diff$ to $0$, and create an empty matrix called $diffs$ with $T$ columns and $T$ rows. 
+
+Now we can construct a loop that will iterate from $1$ to $T$. Within the loop, begin by setting $x.focal_{t}$ equal to $c.cases_{t}$. Now that we have identified the focal x for neighborhood $t$, define the $t^{th}$ row of the $diffs$ matrix to be the absolute value of the difference between each value in $c.cases$ and $x.focal_{t}$. Each row of $diffs$ now contains the difference between the focal $X_{t}$ and each value of $\{X_{t},...,X_{T}\}$. We want to keep the $m$ closest obvservations to each of our focal $X_{t}$'s, so we will set $which.diff_{t}$ to be the $m^{th}$ smallest value of the $t^{th}$ row of $diffs$. 
+
+Now we can fill in our $x.n$ by defining the $t^{th}$ row to be every value of $c.cases$ for which the corresponding value of the $t^{th}$ row of $diffs$ is less than or equal to $which.diff_{t}$. To construct the $y.n$ matrix, do the same for values of $c.births$. Note than since $m$ was rounded to be an integer, you may be one observation short or one observation long in some neighborhoods. I dealt with this by taking the first $m$ values of rows of $x.n$ and $y.n$ that were one observation long, and by adding a zero to the end of rows that were one observation short. 
+
+The final product is two matricies, $x.n$ and $y.n$ for which each row, $t$, corresponds to the neighborhood centered around the $t^th$ value of $c.cases$. 
+
+##Step 3: Apply Gaussian Weights 
+The next step in perfroming local linear regression is to apply gaussian weights to each observation for each of your $T$ neighborhoods. The gaussian weight function for the $i^{th}$ observation in the $t^{th}$ neighborhood is as follows:
+
+\begin{equation}
+w_{i}(x.focal_{t})=\frac{K(\frac{x.focal_{t}-x.n_{t,i}}{which.diff_{t}})}{\sum_{i=1}^{m}K(\frac{x.focal_{t}-x.n_{t,i}}{which.diff_{t}})}
+\end{equation}
+
+
+I applied this weight function to each observation $i$ in each neighborhood $t$. In other words, I applied the weight function to each of the $m$ columns in each of the $T$ rows of the $x.n$ matrix, and stored the results in a matrix with the same dimensions as $x.n$ called $x.weights$. 
+
+##Step 4: Complete the Regression
+The final step is to perform $T$ weighted linear regressions. To do this, I regressed each row of $y.n_{t,m}$ onto each row of $x.n_{t,m}$, with weights pulled from the corresponding row of $x.weights_{t,m}$. 
+
+To get a vector of $\{\rho_{t}...\rho_{T}\}$, I pulled the slopes from each of the $T$ regressions. 
+
+To obtain fitted values, I took the fitted value from each regression for the focal $X_{t}$ of that regression.
+
+##Step 5: Complete the Reconstruction
+The final step is to reconstruct the infected and susceptible dynamics. 
+
+I obtained the reconstructed infected dynamics, $\{I_{t}...I_{T}\}$ by multiplying $C_{T}$ by $\rho_{T}$.
+
+I obtained the reconstructed susceptible dynamcis, $\{Z_{t}...Z_{T}\}$ by finding the residuals of the regression. 
+
+At this point, the reconstruction is complete and you can move on to inference. 
+
+\newpage
+#References

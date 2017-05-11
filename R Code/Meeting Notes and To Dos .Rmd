@@ -95,3 +95,27 @@ THESIS WRITING TO DO:
 Questions for Dr. Haran:
 -notation for seasonal rho section
 -what might Finkenstadt and Grenfell mean when they say they chose a bandwidth of .3 times the standard deviation of Xt when sd(cumcases) = 128389.4?s
+
+
+To do (4/6/17):
+- write one page summary of my SR with seasonal rho's 
+- keep reading Jandarov and Haran paper on TSIR gravity model 
+- troubleshoot bayes issues (phil, boston, stlouis, etc)
+  - anything common between them? (check: paper betas, population, SR and IR graphs)
+  - priors on beta and sbar - can they be more general? try to find problem 
+- add names of graphs to graphing functions 
+- add new code to deal with NA's 
+  - see if ignoring NA's in cumsum functions fixes the problem, or if greater problems persist     (make sure to remove from both births and cases for same datapoint)
+- Does switching the cumbirths and cumcases in the regression make a difference? maybe try to regress the other way 
+
+
+
+
+
+Questions for Dr Haran 4/6/17:
+
+- what is the best way to deal with NA's? I don't want to delete them because it will shift my biweeks, and there is no "na.rm" or other option in the cumsum function, which is necessary to reconstruction. For cities with strings of only 1 NA in a row, I took the average of the value before and after it to fill it in - is this an okay thing to do? Feels fudgy but I don't feel like it should impact analysis 
+
+  - if I remove NA's or ignore NA cases when computing cumulative sums, should I also exclude the birth data at those times so that cumulative births and cumulative cases are in line with one another? 
+  
+- some cities run fine through everything, and some come up with errors for bayes. I haven't been able to troubleshoot what the matter is yet. 
