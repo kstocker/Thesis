@@ -119,3 +119,12 @@ Questions for Dr Haran 4/6/17:
   - if I remove NA's or ignore NA cases when computing cumulative sums, should I also exclude the birth data at those times so that cumulative births and cumulative cases are in line with one another? 
   
 - some cities run fine through everything, and some come up with errors for bayes. I haven't been able to troubleshoot what the matter is yet. 
+
+
+
+
+Meeting 5/11:
+- For forward simulation: use the entire markov chain sample for my betas (maybe every thousandth). FOr each subsampled makrov chain, run simulation, at each time point take the median beta (for 1000+ curves)
+- look at posterior means and standard errors for betas from bayes ~ use mcse package in R (monte carlo standard error). Use batchmeans, for computing standard errors. Take matrix of betas and make sure that the standard errors of posterior mean estimates are small (Stan probs does this for me, double check)
+- is there something inherently different between how measles behaves in big cities vs small cities vs medium cities ~ start saying things qualitatively, then start defining what is really happening quantitatively 
+
