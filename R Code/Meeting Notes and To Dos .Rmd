@@ -128,3 +128,6 @@ Meeting 5/11:
 - look at posterior means and standard errors for betas from bayes ~ use mcse package in R (monte carlo standard error). Use batchmeans, for computing standard errors. Take matrix of betas and make sure that the standard errors of posterior mean estimates are small (Stan probs does this for me, double check)
 - is there something inherently different between how measles behaves in big cities vs small cities vs medium cities ~ start saying things qualitatively, then start defining what is really happening quantitatively 
 
+#Questions for June 1st Meeting:
+- when sampling the markov chain, not sure what you meant by taking the median beta at each time point for the 1000+ curves. Was able to sample, simulate, and plot 1000 curves, but wouldn't the median beta for each time point just be the same thing I already did? Maybe I misunderstood.
+- Will be away June 15th (2 weeks from this weeks meeting)

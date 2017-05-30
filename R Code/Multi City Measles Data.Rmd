@@ -824,6 +824,25 @@ stlouis <- fix_na(stlouis, m=c(69, 70), 68, 71)
 
 ```
 
+#Subsampling Markov Chain
+```{r}
+chicago_betasample <- extract(chicago_bayes)$beta[seq(1,
+                                                  nrow(extract(chicago_bayes)$beta),
+                                                  1000),]
+
+
+chicago_1000_sims <- apply(chicago_betasample, MARGIN=1, function(x) 
+  Sim(beta=rep_len(x, length.out = 546), city=chicago, 
+      s_prop=chicago_initials$s_prop[38], chicago_initials$i_prop[43], plot=FALSE))
+
+
+ g<- ggplot(chicago, aes(x=number))+
+      geom_line(aes(y=cases), col="red")
+ for(i in 1:600){
+   g <- g + geom_line(data=chicago_1000_sims[[i+200]], aes(x=chicago$number, y=Cases), col="grey")
+ }
+print(g)
+```
 
 
 
