@@ -555,10 +555,6 @@ ny_bayes <- run_bayes(newyork, which_stan = "high_pop")
 
 chicago_bayes<- run_bayes(chicago, which_stan = "high_pop")
 
-
-
-
-
 neworleans_bayes <- run_bayes(neworleans, which_stan = "high_pop") 
 
 indianapolis_bayes <- run_bayes(indianapolis, which_stan = "high_pop") 
@@ -571,6 +567,10 @@ load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/Chicago_Bayes")
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/NY_Bayes")
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/Baltimore_Bayes")
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/Boston_Bayes")
+
+save(spokane_bayes, file="Spokane_Bayes")
+save(indianapolis_bayes, file="Indianapolis_Bayes")
+save(neworleans_bayes, file="NewOrleans_Bayes")
 ```
 
 ```{r Check Accuracy, echo=FALSE}
