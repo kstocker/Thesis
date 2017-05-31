@@ -591,48 +591,33 @@ ggplot(, aes(x=seq(1,26,1)))+
   geom_point(aes(y=chicago_betas, col="Paper Betas"))+
   labs(x="biweek", y="beta", title="Chicago Beta Comparison")
 
-#Boston:
-boston_accuracy <- accuracy_check(boston_betas, boston_bayes)
+#Spokane:
+spokane_accuracy <- accuracy_check(spokane_betas, spokane_bayes)
 
 ggplot(, aes(x=seq(1,26,1)))+
-  geom_point(aes(y=boston_accuracy$beta_estimate, col="Estimated Betas"))+
-  geom_point(aes(y=boston_betas, col="Paper Betas"))+
-  labs(x="biweek", y="beta", title="Boston Beta Comparison")
+  geom_point(aes(y=spokane_accuracy$beta_estimate, col="Estimated Betas"))+
+  geom_point(aes(y=spokane_betas, col="Paper Betas"))+
+  labs(x="biweek", y="beta", title="Spokane Beta Comparison")
 
 
-#Baltimore:
-baltimore_accuracy <- accuracy_check(baltimore_betas, baltimore_bayes)
+#Indianapolis:
+indianapolis_accuracy <- accuracy_check(indianapolis_betas, indianapolis_bayes)
 
 ggplot(, aes(x=seq(1,26,1)))+
-  geom_point(aes(y=baltimore_accuracy$beta_estimate, col="Estimated Betas"))+
-  geom_point(aes(y=baltimore_betas, col="Paper Betas"))+
-  labs(x="biweek", y="beta", title="Baltimore Beta Comparison")
+  geom_point(aes(y=indianapolis_accuracy$beta_estimate, col="Estimated Betas"))+
+  geom_point(aes(y=indianapolis_betas, col="Paper Betas"))+
+  labs(x="biweek", y="beta", title="Indianapolis Beta Comparison")
 
 
-# #Philly:
-# phil_accuracy <- accuracy_check(phil_betas, phil_bayes)
-# 
-# ggplot(, aes(x=seq(1,26,1)))+
-#   geom_point(aes(y=phil_accuracy$beta_estimate, col="Estimated Betas"))+
-#   geom_point(aes(y=phil_betas, col="Paper Betas"))+
-#   labs(x="biweek", y="beta", title="Philadelphia Beta Comparison")
-# 
-# 
-# #St Louis:
-# stlouis_accuracy <- accuracy_check(stlouis_betas, stlouis_bayes)
-# 
-# ggplot(, aes(x=seq(1,26,1)))+
-#   geom_point(aes(y=stlouis_accuracy$beta_estimate, col="Estimated Betas"))+
-#   geom_point(aes(y=stlouis_betas, col="Paper Betas"))+
-#   labs(x="biweek", y="beta", title="St Louis Beta Comparison")
-# 
-# #Spokane:
-# spokane_accuracy <- accuracy_check(spokane_betas, spokane_bayes)
-# 
-# ggplot(, aes(x=seq(1,26,1)))+
-#   geom_point(aes(y=spokane_accuracy$beta_estimate, col="Estimated Betas"))+
-#   geom_point(aes(y=spokane_betas, col="Paper Betas"))+
-#   labs(x="biweek", y="beta", title="Boston Beta Comparison")
+#New Orleans:
+neworleans_accuracy <- accuracy_check(neworleans_betas, neworleans_bayes)
+
+ggplot(, aes(x=seq(1,26,1)))+
+  geom_point(aes(y=neworleans_accuracy$beta_estimate, col="Estimated Betas"))+
+  geom_point(aes(y=neworleans_betas, col="Paper Betas"))+
+  labs(x="biweek", y="beta", title="New Orleans Beta Comparison")
+
+
 ```
 
 ```{r Validating Model, echo=FALSE}
