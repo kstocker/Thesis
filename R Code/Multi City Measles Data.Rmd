@@ -565,8 +565,9 @@ spokane_bayes <- run_bayes(spokane, which_stan = "high_pop")
 ```{r Load Saved Bayes Outputs, include=FALSE}
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/Chicago_Bayes")
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/NY_Bayes")
-load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/Baltimore_Bayes")
-load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/Boston_Bayes")
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/Spokane_Bayes")
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/Indianapolis_Bayes")
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/NewOrleans_Bayes")
 
 save(spokane_bayes, file="Spokane_Bayes")
 save(indianapolis_bayes, file="Indianapolis_Bayes")
