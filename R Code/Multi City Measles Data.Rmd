@@ -637,38 +637,31 @@ ggplot(, aes(x=seq(1,26,1)))+
 ```{r Validating Model, echo=FALSE}
 #New York
 paste("New York Model")
-#ny_initials <- choose_initials(newyork, ny_betas, ny_bayes)
+
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/ny_initials")
-ny_initials <- ny_mse_matrix
-rm(ny_mse_matrix)
-#which(ny_initials$mse == min(ny_initials$mse), arr.ind = TRUE) #r=127, col=109
-# ny_initials$i_prop[127]
-# ny_initials$s_prop[109]
+
 Sim(beta=rep_len(ny_accuracy$beta_estimate, length.out = 546), city=newyork, 
-               s_prop=ny_initials$s_prop[109], ny_initials$i_prop[127], 
+               s_prop=ny_initials[[3]][2], i_prop=ny_initials[[3]][1], 
                plot=TRUE)[[2]]
+
 paste("New York Simulation MSE")
-min(ny_initials$mse)
+min(ny_initials[[1]]$mse)
 
 #Chicago
 paste("Chicago Model")
-#chicago_initials <- choose_initials(chicago, chicago_betas, chicago_bayes)
-load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/chicago_initials")
-#which(chicago_initials$mse == min(chicago_initials$mse), arr.ind = TRUE) #r=43, col=38
 
-# chicago_initials$i_prop[43]
-# chicago_initials$s_prop[38]
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/chicago_initials")
 
 Sim(beta=rep_len(chicago_accuracy$beta_estimate, length.out = 546), city=chicago, 
-               s_prop=chicago_initials$s_prop[38], chicago_initials$i_prop[43], 
+               s_prop=chicago_initials[[3]][2], i_prop=chicago_initials[[3]][1], 
                plot=TRUE)[[2]]
+
 paste("Chicago Simulation MSE")
-min(chicago_initials$mse)
+min(chicago_initials[[1]]$mse)
 
 #Indianapolis
 paste("Indianapolis Model")
-#indianapolis_initials <- choose_initials(indianapolis, indianapolis_betas, 
-#                                         indianapolis_bayes)
+
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/indianapolis_initials")
 
 
@@ -676,9 +669,11 @@ Sim(beta=rep_len(indianapolis_accuracy$beta_estimate, length.out = 546),
     city=indianapolis, s_prop = indianapolis_initials[[3]][2], i_prop = 
     indianapolis_initials[[3]][1], plot=TRUE)[[2]]
 paste("Indianapolis Simulation MSE")
-min(indianapolis_initials$mse)
+min(indianapolis_initials[[1]]$mse)
 
 indianapolis_initials <- list(initials=indianapolis_initials, indices = which(indianapolis_initials$mse == min(indianapolis_initials$mse), arr.ind=TRUE), chosen_props = c(i_prop=indianapolis_initials$i_prop[which(indianapolis_initials$mse == min(indianapolis_initials$mse), arr.ind=TRUE)[1]], s_prop=indianapolis_initials$s_prop[which(indianapolis_initials$mse == min(indianapolis_initials$mse), arr.ind=TRUE)[2]]))
+
+ny_initials <- list(initials=ny_initials, indices = which(ny_initials$mse == min(ny_initials$mse), arr.ind=TRUE), chosen_props = c(i_prop=ny_initials$i_prop[which(ny_initials$mse == min(ny_initials$mse), arr.ind=TRUE)[1]], s_prop=ny_initials$s_prop[which(ny_initials$mse == min(ny_initials$mse), arr.ind=TRUE)[2]]))
 
 #Spokane
 paste("Spokane Model")
@@ -710,7 +705,7 @@ paste("New Orleans Model MSE")
 min(neworleans_initials[[1]]$mse)
 
 
-save(indianapolis_initials, file="indianapolis_initials")
+save(chicago_initials, file="chicago_initials")
 ```
 
 
