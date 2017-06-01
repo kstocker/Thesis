@@ -407,6 +407,20 @@ choose_initials <- function(city, betas, bayes){
   
   return(list(mse=mean_square_error, s_prop=s_prop, i_prop=i_prop))
 }
+
+validate_model <- function(city, betas, bayes, accuracy){
+  initials <- choose_initials(city, betas, bayes)
+  indices <- which(initials$mse == min(initials$mse), arr.ind=TRUE)
+  
+  i_prop <- initials$i_prop[indices[1]]
+  s_prop <- initials$s_prop[indices[2]]
+  
+  sim_plot <- Sim(beta=rep_len(accuracy$beta_estimate, length.out=546), city=city, 
+                  s_prop = s_prop, i_prop = i_prop, plot=TRUE)[[2]]
+  
+  return(list(initials=initials, indices=indices, chosen_props=c(i_prop=i_prop, s_prop=s_prop), sim_plot))
+}
+
 ```
 
 
@@ -628,75 +642,77 @@ load("/Users/Kaitlyn/Documents/Github/Thesis Git/ny_initials")
 ny_initials <- ny_mse_matrix
 rm(ny_mse_matrix)
 #which(ny_initials$mse == min(ny_initials$mse), arr.ind = TRUE) #r=127, col=109
-ny_initials$i_prop[127]
-ny_initials$s_prop[109]
+# ny_initials$i_prop[127]
+# ny_initials$s_prop[109]
 Sim(beta=rep_len(ny_accuracy$beta_estimate, length.out = 546), city=newyork, 
                s_prop=ny_initials$s_prop[109], ny_initials$i_prop[127], 
                plot=TRUE)[[2]]
+paste("New York Simulation MSE")
+min(ny_initials$mse)
 
 #Chicago
 paste("Chicago Model")
 #chicago_initials <- choose_initials(chicago, chicago_betas, chicago_bayes)
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/chicago_initials")
 #which(chicago_initials$mse == min(chicago_initials$mse), arr.ind = TRUE) #r=43, col=38
-chicago_initials$i_prop[43]
-chicago_initials$s_prop[38]
+
+# chicago_initials$i_prop[43]
+# chicago_initials$s_prop[38]
+
 Sim(beta=rep_len(chicago_accuracy$beta_estimate, length.out = 546), city=chicago, 
                s_prop=chicago_initials$s_prop[38], chicago_initials$i_prop[43], 
                plot=TRUE)[[2]]
+paste("Chicago Simulation MSE")
+min(chicago_initials$mse)
 
 #Indianapolis
 paste("Indianapolis Model")
-indianapolis_initials <- choose_initials(indianapolis, indianapolis_betas, 
-                                         indianapolis_bayes)
-which(indianapolis_initials$mse == min(indianapolis_initials$mse), 
-      arr.ind=TRUE)#r=77, col=98
-indianapolis_initials$i_prop[77]#0.00076
-indianapolis_initials$s_prop[98]#0.04925
+#indianapolis_initials <- choose_initials(indianapolis, indianapolis_betas, 
+#                                         indianapolis_bayes)
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/indianapolis_initials")
+# which(indianapolis_initials$mse == min(indianapolis_initials$mse), 
+#       arr.ind=TRUE)#r=77, col=98
+# indianapolis_initials$i_prop[77]#0.00076
+# indianapolis_initials$s_prop[98]#0.04925
 Sim(beta=rep_len(indianapolis_accuracy$beta_estimate, length.out = 546), 
     city=indianapolis, s_prop = indianapolis_initials$s_prop[98], i_prop = 
     indianapolis_initials$i_prop[77], plot=TRUE)[[2]]
+paste("Indianapolis Simulation MSE")
+min(indianapolis_initials$mse)
+
 
 #Spokane
 paste("Spokane Model")
-spokane_initials <- validate_model(city=spokane, betas=spokane_betas, bayes=spokane_bayes, accuracy = spokane_accuracy)
+#spokane_initials <- validate_model(city=spokane, betas=spokane_betas, 
+#                                   bayes=spokane_bayes, accuracy = 
+#                                   spokane_accuracy)
 
-spokane_initials[[3]]
-
-spokane_initials[[4]]
-
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/spokane_initials")
+props <- spokane_initials[[3]]
+Sim(beta=rep_len(spokane_accuracy$beta_estimate, length.out=546), city=spokane, 
+    s_prop = props[2], i_prop = props[1], 
+    plot=TRUE)[[2]]
+paste("Spokane Model MSE")
+min(spokane_initials[[1]]$mse)
 
 #New Orleans 
 paste("New Orleans Model")
-neworleans_initials <- choose_initials(neworleans, neworleans_betas, 
-                                       neworleans_bayes)
-which(neworleans_initials$mse == min(neworleans_initials$mse), arr.ind=TRUE)
-neworleans_initials$i_prop[]
-neworleans_initials$s_prop[]
-Sim(beta=rep_len(neworleans_accuracy$beta_estimate, length.out = 546), city= 
-      neworleans, s_prop = neworleans_initials$s_prop[], i_prop = 
-      neworleans_initials$i_prop[], plot=TRUE)[[2]]
+#neworleans_initials <- validate_model(city=neworleans, betas=neworleans_betas, 
+                                      # bayes=neworleans_bayes, accuracy = 
+                                      # neworleans_accuracy)
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/neworleans_initials")
 
+props <- neworleans_initials[[3]]
 
-save(indianapolis_initials, file="indianapolis_initials")
-save(spokane_initials, file="spokane_initials")
-save(neworleans_initials, file="neworleans_initials")
+Sim(beta=rep_len(neworleans_accuracy$beta_estimate, length.out=546), 
+    city=neworleans, s_prop = props[2], i_prop = props[1],  plot=TRUE)[[2]]
+paste("New Orleans Model MSE")
+min(neworleans_initials[[1]]$mse)
+
 ```
 
 
 ```{r Function Testing Center, eval=FALSE, include=FALSE}
-validate_model <- function(city, betas, bayes, accuracy){
-  initials <- choose_initials(city, betas, bayes)
-  indices <- which(initials$mse == min(initials$mse), arr.ind=TRUE)
-  
-  i_prop <- initials$i_prop[indices[1]]
-  s_prop <- initials$s_prop[indices[2]]
-  
-  sim_plot <- Sim(beta=rep_len(accuracy$beta_estimate, length.out=546), city=city, 
-                  s_prop = s_prop, i_prop = i_prop, plot=TRUE)[[2]]
-  
-  return(list(initials=initials, indices=indices, chosen_props=c(i_prop=i_prop, s_prop=s_prop), sim_plot))
-}
 
 paste("Spokane Model")
 spokane_initials <- choose_initials(spokane, spokane_betas, spokane_bayes)

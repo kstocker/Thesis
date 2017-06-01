@@ -645,7 +645,7 @@ It follows that the transmission rate can be expressed as a function of time, $\
 The parameter $\beta_{0}$ in equation 19 gives the baseline transmission rate. The parameter $\omega$ gives the period of seasonal forcing, and is therefore equal to $\frac{\pi}{T}$ where $T$ is the number of $\beta$'s in a single calendar year. The parameter $\beta_{1}$ determines the amplitude of the seasonality and is therefore bounded between 0 and 1. For measles, $\beta_{0}$ is around 17 new cases per biweek, and $\omega = \frac{\pi}{26}$. In the case of seasonal transmission rates, $R_{0} = \frac{\beta_{0}}{\gamma}$.
 
 
-###Susceptible Reconstruction
+####Susceptible Reconstruction
 In previous exercises, I had access to perfect and complete simulated data. While having such complete data is convenient, it is not realistic. Data gathered in real-world situations is much less inference-ready than the simulated data I have been using thus far.
 
 Real data deviates from simulated data in a number of significant ways. For one thing, real data is incomplete. Not all cases of a disease are reported, so the number of infecteds at any given time point must be estimated using the number of reported cases multiplied by the reporting rate. There is typically no information about the true number of susceptible or recovered individuals, as collecting this information would be extremely impractical and cost-prohibitive. 
@@ -761,9 +761,16 @@ plot_grid(linearplot, localplot, labels=c("A", "B"), ncol = 1, nrow = 2)
 
 Figure \ref{Zlocal} demonstrates graphically that the Z dynamics obtained through local linear regression do not display the local shifts away from the mean seen in the Z dynamics obtained via global linear regression. 
 
-To complete the reconstruction process, the infected dynamics are obtained by multiplying $\rho_{t}$ and by the reported cases. 
+To complete the reconstruction process, the infected dynamics are obtained by multiplying $\rho_{t}$ and the reported cases. 
 
-\citep{tycho}
+At this point, the data is fully reconstructed and can be passed through Bayes without any further modification. As previously discussed, the Bayes output will include posterior distributions from all 26 $\beta_{t}$'s as well as for $\bar{S}$, the mean number of susceptibles. 
+
+####Validating the Model
+Once the data has been reconstructed and Bayesian inference has been performed, the model is complete. It is important, at this point, to make sure that the model obtained from the previous steps is actually able to accurately simulate the epidemic dynamics. 
+
+To this end, I simulated from my model for each of the cities I studied. However, before I could do that I needed to select point estimates for each $\beta_{t}$ and for the initial proportion of susceptibles and infecteds ($S_{0}$ and $I_{0}$). I began by using the median from the posterior distrubution of each $\beta_{t}$, and taking the initial proportion of susceptible and infected individuals from the first time point of my reconstructed susceptible and infected dynamics. However, the simulations are highly influenced by small deviations in the initial proportion of susceptibles and infecteds. Even a .001 difference can produce 
+
+<!-- \citep{tycho} -->
 
 \newpage
 #References
