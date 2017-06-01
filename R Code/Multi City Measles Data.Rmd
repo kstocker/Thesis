@@ -670,16 +670,15 @@ paste("Indianapolis Model")
 #indianapolis_initials <- choose_initials(indianapolis, indianapolis_betas, 
 #                                         indianapolis_bayes)
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/indianapolis_initials")
-# which(indianapolis_initials$mse == min(indianapolis_initials$mse), 
-#       arr.ind=TRUE)#r=77, col=98
-# indianapolis_initials$i_prop[77]#0.00076
-# indianapolis_initials$s_prop[98]#0.04925
+
+
 Sim(beta=rep_len(indianapolis_accuracy$beta_estimate, length.out = 546), 
-    city=indianapolis, s_prop = indianapolis_initials$s_prop[98], i_prop = 
-    indianapolis_initials$i_prop[77], plot=TRUE)[[2]]
+    city=indianapolis, s_prop = indianapolis_initials[[3]][2], i_prop = 
+    indianapolis_initials[[3]][1], plot=TRUE)[[2]]
 paste("Indianapolis Simulation MSE")
 min(indianapolis_initials$mse)
 
+indianapolis_initials <- list(initials=indianapolis_initials, indices = which(indianapolis_initials$mse == min(indianapolis_initials$mse), arr.ind=TRUE), chosen_props = c(i_prop=indianapolis_initials$i_prop[which(indianapolis_initials$mse == min(indianapolis_initials$mse), arr.ind=TRUE)[1]], s_prop=indianapolis_initials$s_prop[which(indianapolis_initials$mse == min(indianapolis_initials$mse), arr.ind=TRUE)[2]]))
 
 #Spokane
 paste("Spokane Model")
@@ -688,10 +687,11 @@ paste("Spokane Model")
 #                                   spokane_accuracy)
 
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/spokane_initials")
-props <- spokane_initials[[3]]
+
 Sim(beta=rep_len(spokane_accuracy$beta_estimate, length.out=546), city=spokane, 
-    s_prop = props[2], i_prop = props[1], 
+    s_prop = spokane_initials[[3]][2], i_prop = spokane_initials[[3]][1], 
     plot=TRUE)[[2]]
+
 paste("Spokane Model MSE")
 min(spokane_initials[[1]]$mse)
 
@@ -702,26 +702,19 @@ paste("New Orleans Model")
                                       # neworleans_accuracy)
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/neworleans_initials")
 
-props <- neworleans_initials[[3]]
-
 Sim(beta=rep_len(neworleans_accuracy$beta_estimate, length.out=546), 
-    city=neworleans, s_prop = props[2], i_prop = props[1],  plot=TRUE)[[2]]
+    city=neworleans, s_prop = neworleans_initials[[3]][2], i_prop = 
+      neworleans_initials[[3]][1],  plot=TRUE)[[2]]
+
 paste("New Orleans Model MSE")
 min(neworleans_initials[[1]]$mse)
 
+
+save(indianapolis_initials, file="indianapolis_initials")
 ```
 
 
 ```{r Function Testing Center, eval=FALSE, include=FALSE}
-
-paste("Spokane Model")
-spokane_initials <- choose_initials(spokane, spokane_betas, spokane_bayes)
-which(spokane_initials$mse == min(spokane_initials$mse), arr.ind=TRUE)
-spokane_initials$i_prop[]
-spokane_initials$s_prop[]
-Sim(beta=rep_len(spokane_accuracy$beta_estimate, length.out=546), city=spokane, 
-    s_prop = spokane_initials$s_prop[], i_prop = spokane_initials$i_prop[], 
-    plot=TRUE)[[2]]
 ```
 
 
@@ -811,22 +804,26 @@ stlouis <- fix_na(stlouis, m=c(69, 70), 68, 71)
 ```
 
 #Subsampling Markov Chain
-```{r}
+```{r Subsampling Markov Chain, echo=FALSE}
 chicago_betasample <- extract(chicago_bayes)$beta[seq(1,
                                                   nrow(extract(chicago_bayes)$beta),
                                                   1000),]
 
 
 chicago_1000_sims <- apply(chicago_betasample, MARGIN=1, function(x) 
-  Sim(beta=rep_len(x, length.out = 546), city=chicago, 
-      s_prop=chicago_initials$s_prop[38], chicago_initials$i_prop[43], plot=FALSE))
+                           Sim(beta=rep_len(x, length.out = 546), city=chicago, 
+                               s_prop=chicago_initials$s_prop[38], 
+                               chicago_initials$i_prop[43], plot=FALSE))
 
 
  g<- ggplot(chicago, aes(x=number))+
       geom_line(aes(y=cases), col="red")
- for(i in 1:600){
-   g <- g + geom_line(data=chicago_1000_sims[[i+200]], aes(x=chicago$number, y=Cases), col="grey")
+
+  for(i in 1:600){
+   g <- g + geom_line(data=chicago_1000_sims[[i+200]], aes(x=chicago$number, 
+                                                           y=Cases), col="grey")
  }
+ 
 print(g)
 ```
 
