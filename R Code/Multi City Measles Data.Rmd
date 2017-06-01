@@ -638,7 +638,7 @@ ggplot(, aes(x=seq(1,26,1)))+
 #New York
 paste("New York Model")
 
-load("/Users/Kaitlyn/Documents/Github/Thesis Git/ny_initials")
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/ny_initials")
 
 Sim(beta=rep_len(ny_accuracy$beta_estimate, length.out = 546), city=newyork, 
                s_prop=ny_initials[[3]][2], i_prop=ny_initials[[3]][1], 
@@ -705,7 +705,6 @@ paste("New Orleans Model MSE")
 min(neworleans_initials[[1]]$mse)
 
 
-save(chicago_initials, file="chicago_initials")
 ```
 
 
