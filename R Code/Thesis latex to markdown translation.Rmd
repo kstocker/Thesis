@@ -50,6 +50,40 @@ names(results) <- c("I", "S", "R")
 return(results)
 }
 
+Sim2 <- function(beta, city, s_prop, i_prop, plot, title) {
+  i.now <- i_prop*city$pop[1]
+  s.now <- s_prop*city$pop[1]
+  r.now <- city$pop[1]-i.now-s.now
+  cases <- city$cases[1]
+
+  results <- as.data.frame(matrix(c(i.now, s.now, r.now, cases), nrow=1))
+  names(results) <- c("I", "S", "R", "Cases")
+    for(i in 1:545){
+     if(s.now*i.now >0){
+      n.now <- city$pop[i]
+      i.next <- beta[i]*(i.now^.975)*s.now/n.now
+      b.now <- city$rec[i]
+      s.now <- s.now - i.next + b.now
+      r.now <- r.now + i.now
+      i.now <- i.next
+      cases <- i.now/city$rho[i]
+  results <- rbind(results, c(i.now, s.now, r.now, cases))
+    }
+    else {break}
+    }
+  
+    sim_plot <- ggplot(city, aes(x=number))+
+               geom_line(aes(y=cases, col="Incidence Data"))+
+               geom_line(aes(y=results$Cases, col="Simulated Cases"))+
+               labs(title=title)+
+               theme(text = element_text(size=10))
+    
+    if(plot==TRUE){return(list(results, sim_plot))}
+    
+    if(plot==FALSE){return(results)}
+
+}
+
 read_in_city <- function(city_, naremove){
 
   df <- measles %>%
@@ -358,6 +392,50 @@ fix_na <- function(df, m, k, j){
   df$cases[m[i]] <- (df$cases[k] + df$cases[j])/2
   }
   return(df)
+}
+
+choose_initials <- function(city, betas, bayes){
+  beta_est <- accuracy_check(betas, bayes)$beta_estimate
+  
+  s_prop <- seq(0.025, 0.05, 0.00025)#check with this interval, then bump it to   
+                                    #0.00001 
+  
+  i_prop <- seq(0, 0.001, length.out=length(s_prop))
+  
+  x<-seq(1, length(s_prop), 1)
+  
+  mse <- function(x,y){
+    sim <- Sim2(beta=rep_len(beta_est, length.out = 546), city=city, 
+               s_prop=x, i_prop=y, plot=FALSE, title="hi")
+    
+    mean_square_error_ <- sum((sim$Cases/city$pop-city$cases/city$pop)^2)
+    
+    return(mean_square_error_)
+  }
+  mean_square_error <- sapply(x, function(i) sapply(x, function(j) mse(s_prop[i], i_prop[j])))
+  
+  rownames(mean_square_error) <- sapply(1:length(i_prop), function(x) 
+    paste("I_prop", x))
+  
+  colnames(mean_square_error) <- sapply(1:length(s_prop), function(x) 
+    paste("S_prop", x))
+  
+  
+  return(list(mse=mean_square_error, s_prop=s_prop, i_prop=i_prop))
+}
+
+validate_model <- function(city, betas, bayes, accuracy, plot_title){
+  initials <- choose_initials(city, betas, bayes)
+  indices <- which(initials$mse == min(initials$mse), arr.ind=TRUE)
+  
+  i_prop <- initials$i_prop[indices[1]]
+  s_prop <- initials$s_prop[indices[2]]
+  
+  sim_plot <- Sim2(beta=rep_len(accuracy$beta_estimate, length.out=546), city=city, 
+                  s_prop = s_prop, i_prop = i_prop, plot=TRUE, 
+                  title=plot_title)[[2]]
+  
+  return(list(initials=initials, indices=indices, chosen_props=c(i_prop=i_prop, s_prop=s_prop), sim_plot))
 }
 ```
 
@@ -741,6 +819,7 @@ Once I computed the gaussian weight for each datapoint in the $X_{n}$ matrix, I 
 ```{r LocalReg, echo=FALSE, fig.cap="Comparison of reconstructed Z dynamics from the New York data. Plot (A) shows Z dynamics obtained via global linear regression. Plot (B) shows Z dynamics obtained via local linear regression. \\label{Zlocal}"}
 newyork <- read_in_city("NEW YORK", naremove=FALSE)[[1]]
 
+
 scale_optim_ny <- 0.28 #from previous analysis 
 
 newyork <- local_regression(newyork, scale_optim_ny)
@@ -768,7 +847,58 @@ At this point, the data is fully reconstructed and can be passed through Bayes w
 ####Validating the Model
 Once the data has been reconstructed and Bayesian inference has been performed, the model is complete. It is important, at this point, to make sure that the model obtained from the previous steps is actually able to accurately simulate the epidemic dynamics. 
 
-To this end, I simulated from my model for each of the cities I studied. However, before I could do that I needed to select point estimates for each $\beta_{t}$ and for the initial proportion of susceptibles and infecteds ($S_{0}$ and $I_{0}$). I began by using the median from the posterior distrubution of each $\beta_{t}$, and taking the initial proportion of susceptible and infected individuals from the first time point of my reconstructed susceptible and infected dynamics. However, the simulations are highly influenced by small deviations in the initial proportion of susceptibles and infecteds. Even a .001 difference can produce 
+To this end, I simulated from my model for each of the cities I studied. However, before I could do that I needed to select point estimates for each $\beta_{t}$ and for the initial proportion of susceptibles and infecteds ($S_{0}$ and $I_{0}$). I began by using the median from the posterior distrubution of each $\beta_{t}$, and taking the initial proportion of susceptible and infected individuals from the first time point of my reconstructed susceptible and infected dynamics. However, the simulations are highly influenced by small deviations in the initial proportion of susceptibles and infecteds. For this reason, I decided to choose my initial proportion of susceptibles and infecteds by simulating from a range of proportions and choosing the initial conditions that yielded the lowest mean square error when compared with the incidence data from [@tycho]. I simulated with initial susceptible proportions between 0.025 and 0.05 and initial infected proportions between 0 and 0.001. I chose these values based on the work of Bjornstad et al [@BjornstadGrenfellMeasles]. Figure \ref{validate} shows the successful forward simulation using the initial conditions and transmission rates taken from this procedure. 
+
+```{r Load Validation Info, include=FALSE}
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/ny_initials")
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/chicago_initials")
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/indianapolis_initials")
+
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/Chicago_Bayes")
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/NY_Bayes")
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/Indianapolis_Bayes")
+
+newyork <- read_in_city("NEW YORK", naremove=FALSE)[[1]]
+ny_betas <- read_in_city("NEW YORK", naremove=FALSE)[[2]]
+
+
+chicago <- read_in_city("CHICAGO", naremove=TRUE)[[1]]
+chicago_betas <- read_in_city("CHICAGO", naremove=TRUE)[[2]]
+chicago <- local_regression(chicago, scale_optim_ny)
+
+indianapolis <- read_in_city("INDIANAPOLIS", naremove=TRUE)[[1]]
+indianapolis_betas <- read_in_city("INDIANAPOLIS", naremove=TRUE)[[2]]
+indianapolis <- local_regression(indianapolis, scale_optim_ny)
+
+ny_accuracy <- accuracy_check(ny_betas, ny_bayes)
+chicago_accuracy <- accuracy_check(chicago_betas, chicago_bayes)
+indianapolis_accuracy <- accuracy_check(indianapolis_betas, indianapolis_bayes)
+
+```
+
+
+```{r Validation, echo=FALSE, fig.cap="Plots show the successful forward simulation from the deterministic skeleton of the TSIR model parameterized with city-level data (in blue)  versus the incidence data taken from tycho (in red). Simulations were started from  the initial conditions obtained by minimizing the mean square error and were not fed any additional information from the incidence data once the simulation begun. Simulations were carried out for 20 years. \\label{validate}"}
+
+
+ny_plot <- Sim2(beta=rep_len(ny_accuracy$beta_estimate, length.out = 546), 
+                city=newyork, s_prop=ny_initials[[3]][2], 
+                i_prop=ny_initials[[3]][1], plot=TRUE, title="New York")[[2]] 
+
+chicago_plot <- Sim2(beta=rep_len(chicago_accuracy$beta_estimate, length.out = 546),
+                     city=chicago, s_prop=chicago_initials[[3]][2], 
+                     i_prop=chicago_initials[[3]][1], plot=TRUE, 
+                     title="Chicago")[[2]]
+
+indianapolis_plot <- Sim2(beta=rep_len(indianapolis_accuracy$beta_estimate, 
+                                       length.out = 546), city=indianapolis, s_prop 
+                          = indianapolis_initials[[3]][2], i_prop =
+                            indianapolis_initials[[3]][1], plot=TRUE, 
+                          title="Indianapolis")[[2]]
+                    
+
+plot_grid(ny_plot, chicago_plot, indianapolis_plot, ncol = 1, nrow = 3)
+```
+
 
 <!-- \citep{tycho} -->
 
@@ -777,3 +907,4 @@ To this end, I simulated from my model for each of the cities I studied. However
 [@KeelingBook]
 [@tycho]
 [@SRgrenfell]
+[@BjornstadGrenfellMeasles]

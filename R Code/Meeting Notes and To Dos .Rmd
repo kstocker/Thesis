@@ -131,3 +131,5 @@ Meeting 5/11:
 #Questions for June 1st Meeting:
 - when sampling the markov chain, not sure what you meant by taking the median beta at each time point for the 1000+ curves. Was able to sample, simulate, and plot 1000 curves, but wouldn't the median beta for each time point just be the same thing I already did? Maybe I misunderstood.
 - Will be away June 15th (2 weeks from this weeks meeting)
+- how to make plot like the one from the paper (for susceptible vs infected proportions)?
+  - note: they chose initial conditions based on the distance between the simulation and the data during the peak month of may. I did it for all datapoints. 

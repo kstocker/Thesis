@@ -588,7 +588,7 @@ save(indianapolis_bayes, file="Indianapolis_Bayes")
 save(neworleans_bayes, file="NewOrleans_Bayes")
 ```
 
-```{r Check Accuracy, echo=FALSE}
+```{r Check Accuracy, include=FALSE}
 #New York: Betas look very accurate! 
 ny_accuracy <- accuracy_check(ny_betas, ny_bayes)
 
@@ -638,17 +638,27 @@ ggplot(, aes(x=seq(1,26,1)))+
 #New York
 paste("New York Model")
 
+ggplot(, aes(x=seq(1,26,1)))+
+  geom_point(aes(y=ny_accuracy$beta_estimate, col="Estimated Betas"))+
+  geom_point(aes(y=ny_betas, col="Paper Betas"))+
+  labs(x="biweek", y="beta", title="New York Beta Comparison")
+
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/ny_initials")
 
 Sim(beta=rep_len(ny_accuracy$beta_estimate, length.out = 546), city=newyork, 
                s_prop=ny_initials[[3]][2], i_prop=ny_initials[[3]][1], 
                plot=TRUE)[[2]]
 
-paste("New York Simulation MSE")
-min(ny_initials[[1]]$mse)
+paste("New York Simulation MSE:", min(ny_initials[[1]]$mse)) 
+
 
 #Chicago
 paste("Chicago Model")
+
+ggplot(, aes(x=seq(1,26,1)))+
+  geom_point(aes(y=chicago_accuracy$beta_estimate, col="Estimated Betas"))+
+  geom_point(aes(y=chicago_betas, col="Paper Betas"))+
+  labs(x="biweek", y="beta", title="Chicago Beta Comparison")
 
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/chicago_initials")
 
@@ -656,30 +666,35 @@ Sim(beta=rep_len(chicago_accuracy$beta_estimate, length.out = 546), city=chicago
                s_prop=chicago_initials[[3]][2], i_prop=chicago_initials[[3]][1], 
                plot=TRUE)[[2]]
 
-paste("Chicago Simulation MSE")
-min(chicago_initials[[1]]$mse)
+paste("Chicago Simulation MSE:", min(chicago_initials[[1]]$mse))
+
+
 
 #Indianapolis
 paste("Indianapolis Model")
 
-load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/indianapolis_initials")
+ggplot(, aes(x=seq(1,26,1)))+
+  geom_point(aes(y=indianapolis_accuracy$beta_estimate, col="Estimated Betas"))+
+  geom_point(aes(y=indianapolis_betas, col="Paper Betas"))+
+  labs(x="biweek", y="beta", title="Indianapolis Beta Comparison")
 
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/indianapolis_initials")
 
 Sim(beta=rep_len(indianapolis_accuracy$beta_estimate, length.out = 546), 
     city=indianapolis, s_prop = indianapolis_initials[[3]][2], i_prop = 
     indianapolis_initials[[3]][1], plot=TRUE)[[2]]
-paste("Indianapolis Simulation MSE")
-min(indianapolis_initials[[1]]$mse)
 
-indianapolis_initials <- list(initials=indianapolis_initials, indices = which(indianapolis_initials$mse == min(indianapolis_initials$mse), arr.ind=TRUE), chosen_props = c(i_prop=indianapolis_initials$i_prop[which(indianapolis_initials$mse == min(indianapolis_initials$mse), arr.ind=TRUE)[1]], s_prop=indianapolis_initials$s_prop[which(indianapolis_initials$mse == min(indianapolis_initials$mse), arr.ind=TRUE)[2]]))
+paste("Indianapolis Simulation MSE:", min(indianapolis_initials[[1]]$mse))
 
-ny_initials <- list(initials=ny_initials, indices = which(ny_initials$mse == min(ny_initials$mse), arr.ind=TRUE), chosen_props = c(i_prop=ny_initials$i_prop[which(ny_initials$mse == min(ny_initials$mse), arr.ind=TRUE)[1]], s_prop=ny_initials$s_prop[which(ny_initials$mse == min(ny_initials$mse), arr.ind=TRUE)[2]]))
+
 
 #Spokane
 paste("Spokane Model")
-#spokane_initials <- validate_model(city=spokane, betas=spokane_betas, 
-#                                   bayes=spokane_bayes, accuracy = 
-#                                   spokane_accuracy)
+
+ggplot(, aes(x=seq(1,26,1)))+
+  geom_point(aes(y=spokane_accuracy$beta_estimate, col="Estimated Betas"))+
+  geom_point(aes(y=spokane_betas, col="Paper Betas"))+
+  labs(x="biweek", y="beta", title="Spokane Beta Comparison")
 
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/spokane_initials")
 
@@ -687,22 +702,26 @@ Sim(beta=rep_len(spokane_accuracy$beta_estimate, length.out=546), city=spokane,
     s_prop = spokane_initials[[3]][2], i_prop = spokane_initials[[3]][1], 
     plot=TRUE)[[2]]
 
-paste("Spokane Model MSE")
-min(spokane_initials[[1]]$mse)
+paste("Spokane Model MSE:", min(spokane_initials[[1]]$mse))
+
+
 
 #New Orleans 
 paste("New Orleans Model")
-#neworleans_initials <- validate_model(city=neworleans, betas=neworleans_betas, 
-                                      # bayes=neworleans_bayes, accuracy = 
-                                      # neworleans_accuracy)
+
+ggplot(, aes(x=seq(1,26,1)))+
+  geom_point(aes(y=neworleans_accuracy$beta_estimate, col="Estimated Betas"))+
+  geom_point(aes(y=neworleans_betas, col="Paper Betas"))+
+  labs(x="biweek", y="beta", title="New Orleans Beta Comparison")
+
 load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/neworleans_initials")
 
 Sim(beta=rep_len(neworleans_accuracy$beta_estimate, length.out=546), 
     city=neworleans, s_prop = neworleans_initials[[3]][2], i_prop = 
       neworleans_initials[[3]][1],  plot=TRUE)[[2]]
 
-paste("New Orleans Model MSE")
-min(neworleans_initials[[1]]$mse)
+paste("New Orleans Model MSE:", min(neworleans_initials[[1]]$mse))
+
 
 
 ```
@@ -797,7 +816,7 @@ stlouis <- fix_na(stlouis, m=c(69, 70), 68, 71)
 
 ```
 
-#Subsampling Markov Chain
+
 ```{r Subsampling Markov Chain, echo=FALSE}
 chicago_betasample <- extract(chicago_bayes)$beta[seq(1,
                                                   nrow(extract(chicago_bayes)$beta),
@@ -806,8 +825,8 @@ chicago_betasample <- extract(chicago_bayes)$beta[seq(1,
 
 chicago_1000_sims <- apply(chicago_betasample, MARGIN=1, function(x) 
                            Sim(beta=rep_len(x, length.out = 546), city=chicago, 
-                               s_prop=chicago_initials$s_prop[38], 
-                               chicago_initials$i_prop[43], plot=FALSE))
+                               s_prop=chicago_initials[[3]][2], i_prop = 
+                               chicago_initials[[3]][1], plot=FALSE))
 
 
  g<- ggplot(chicago, aes(x=number))+
