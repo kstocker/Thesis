@@ -644,30 +644,68 @@ chicago_initials$s_prop[38]
 Sim(beta=rep_len(chicago_accuracy$beta_estimate, length.out = 546), city=chicago, 
                s_prop=chicago_initials$s_prop[38], chicago_initials$i_prop[43], 
                plot=TRUE)[[2]]
+
+#Indianapolis
+paste("Indianapolis Model")
+indianapolis_initials <- choose_initials(indianapolis, indianapolis_betas, 
+                                         indianapolis_bayes)
+which(indianapolis_initials$mse == min(indianapolis_initials$mse), 
+      arr.ind=TRUE)#r=77, col=98
+indianapolis_initials$i_prop[77]#0.00076
+indianapolis_initials$s_prop[98]#0.04925
+Sim(beta=rep_len(indianapolis_accuracy$beta_estimate, length.out = 546), 
+    city=indianapolis, s_prop = indianapolis_initials$s_prop[98], i_prop = 
+    indianapolis_initials$i_prop[77], plot=TRUE)[[2]]
+
+#Spokane
+paste("Spokane Model")
+spokane_initials <- validate_model(city=spokane, betas=spokane_betas, bayes=spokane_bayes, accuracy = spokane_accuracy)
+
+spokane_initials[[3]]
+
+spokane_initials[[4]]
+
+
+#New Orleans 
+paste("New Orleans Model")
+neworleans_initials <- choose_initials(neworleans, neworleans_betas, 
+                                       neworleans_bayes)
+which(neworleans_initials$mse == min(neworleans_initials$mse), arr.ind=TRUE)
+neworleans_initials$i_prop[]
+neworleans_initials$s_prop[]
+Sim(beta=rep_len(neworleans_accuracy$beta_estimate, length.out = 546), city= 
+      neworleans, s_prop = neworleans_initials$s_prop[], i_prop = 
+      neworleans_initials$i_prop[], plot=TRUE)[[2]]
+
+
+save(indianapolis_initials, file="indianapolis_initials")
+save(spokane_initials, file="spokane_initials")
+save(neworleans_initials, file="neworleans_initials")
 ```
 
 
 ```{r Function Testing Center, eval=FALSE, include=FALSE}
-start <- Sys.time()
-chicago_initials <- choose_initials(chicago, chicago_betas, chicago_bayes)
-Sys.time() - start
-rm(start)
+validate_model <- function(city, betas, bayes, accuracy){
+  initials <- choose_initials(city, betas, bayes)
+  indices <- which(initials$mse == min(initials$mse), arr.ind=TRUE)
+  
+  i_prop <- initials$i_prop[indices[1]]
+  s_prop <- initials$s_prop[indices[2]]
+  
+  sim_plot <- Sim(beta=rep_len(accuracy$beta_estimate, length.out=546), city=city, 
+                  s_prop = s_prop, i_prop = i_prop, plot=TRUE)[[2]]
+  
+  return(list(initials=initials, indices=indices, chosen_props=c(i_prop=i_prop, s_prop=s_prop), sim_plot))
+}
 
-
-
-
-ny_mse_matrix <- choose_sinit(newyork, ny_betas, ny_bayes)
-
-which(ny_mse_matrix$mse == min(ny_mse_matrix$mse), arr.ind = TRUE) #r=127, col=109
-quantile(ny_mse_matrix$mse, probs=.05)
-
-ny_mse_matrix$i_prop[127]
-ny_mse_matrix$s_prop[109]
-plot(ny_mse_matrix$mse)
-
-Sim(beta=rep_len(ny_betas_est, length.out = 546), city=newyork, 
-               s_prop=ny_mse_matrix$s_prop[109], i_prop=ny_mse_matrix$i_prop[127], 
-               plot=TRUE)[[2]]
+paste("Spokane Model")
+spokane_initials <- choose_initials(spokane, spokane_betas, spokane_bayes)
+which(spokane_initials$mse == min(spokane_initials$mse), arr.ind=TRUE)
+spokane_initials$i_prop[]
+spokane_initials$s_prop[]
+Sim(beta=rep_len(spokane_accuracy$beta_estimate, length.out=546), city=spokane, 
+    s_prop = spokane_initials$s_prop[], i_prop = spokane_initials$i_prop[], 
+    plot=TRUE)[[2]]
 ```
 
 
