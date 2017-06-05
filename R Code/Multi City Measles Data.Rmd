@@ -874,12 +874,13 @@ test2 <- as.data.frame(t(apply(chicago_cases, MARGIN=2, credible_interval)))
 names(test) <- c("lower", "upper")
 names(test2) <- c("lower", "upper")
 
-ggplot(test2, aes(x=chicago$number))+
+chicago_interval_plot <- ggplot(test2, aes(x=chicago$number))+
   # geom_line(aes(y=lower, col="lower"))+
   # geom_line(aes(y=upper, col="upper"))+
   geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.6)+
   geom_line(aes(y=chicago$cases, col="data"))+
-  geom_line(aes(y=test$Cases, col="sim"))
+  geom_line(aes(y=chicago_baseline$Cases, col="sim"))+
+  labs(x="Biweek", y="Cases", title="Chicago Simulation")
 
 
 chicago_baseline <- Sim(beta=rep_len(chicago_accuracy$beta_estimate, length.out = 

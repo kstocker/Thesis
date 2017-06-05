@@ -146,3 +146,11 @@ Meeting 5/11:
   ***EMAIL DR HARAN the outline we talked about***
   - tuesday june 13th 1:30-3:30 (optimistic)intensive thesis writeup meeting
   - chapter intros: extremely short paragraphs (5 sentences) that says what the chapter is about (maybe make a sketch of the intros first, should tell someone what I did)
+  
+#Notes for June 8 meeting 
+- when I took 95% interval for each time point, some of them did not include the original simulation with the median betas. 
+  - options: 
+      - overwrite interval where it doesn't include the og simulation to have the           bound be at the simulation.
+      - change method of computing intervals to be a confidence interval with the og         simulation as the mean. 
+      - ??
+-
