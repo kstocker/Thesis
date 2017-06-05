@@ -133,3 +133,16 @@ Meeting 5/11:
 - Will be away June 15th (2 weeks from this weeks meeting)
 - how to make plot like the one from the paper (for susceptible vs infected proportions)?
   - note: they chose initial conditions based on the distance between the simulation and the data during the peak month of may. I did it for all datapoints. 
+
+
+#June 1st meeting
+- with 1000 curves, can get 95% interval for the number of infecteds at each time point. Make plot similar to my old susceptible reconstruction plots (learning about hierarchical distributions and mixture modeling)... similar to my plot but take 95% interval for each 
+- kernel density 2d plot (go on cran and look it up)
+-free time series book: Cryer and Chan called Time Series Analysis with Applications in R (on Dr Haran's website, go to courses taught in previous semesters)
+- reason Bjornstad et al chose to do MSE for just peak in may vs whole curve is to capture disease signitures ~ could try that myself 
+- what next?: 
+  - get thesis DONE by July 1st. 
+  - short qualitative essay on what is the difference between small/medium/large cities ~ how does city size affect model fit? why? what's happening? 
+  ***EMAIL DR HARAN the outline we talked about***
+  - tuesday june 13th 1:30-3:30 (optimistic)intensive thesis writeup meeting
+  - chapter intros: extremely short paragraphs (5 sentences) that says what the chapter is about (maybe make a sketch of the intros first, should tell someone what I did)

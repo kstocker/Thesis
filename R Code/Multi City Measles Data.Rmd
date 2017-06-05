@@ -838,9 +838,87 @@ chicago_1000_sims <- apply(chicago_betasample, MARGIN=1, function(x)
  }
  
 print(g)
+
+#need to 1) make vector of length 1000 for each time point (cases at time 1, cases at time 2, etc). 2) find 95% confidence interval at each point 
+
+
+chicago_cases <- data.frame()
+for(i in 1:1000){
+  for(j in 1:546){
+    chicago_cases[i,j] <- chicago_1000_sims[[i]]$Cases[j]
+  }
+}
+
+
+confidence_interval <- function(x){
+  a<-mean(x)
+  s <- sd(x)
+  n<-length(x)
+  
+  error <- qt(0.975,df=n-1)*s/sqrt(n)
+  lower <- a-error
+  upper <- a+error
+  
+  return(c(lower,upper))
+}
+
+credible_interval <- function(x){
+  lower <- quantile(x, probs=.025, names=FALSE)
+  upper <- quantile(x, probs=.975, names=FALSE)
+  return(c(lower, upper))
+}
+
+test <- as.data.frame(t(apply(chicago_cases, MARGIN=2, confidence_interval))) #rows are upper/lower, columns are time points
+test2 <- as.data.frame(t(apply(chicago_cases, MARGIN=2, credible_interval)))
+
+names(test) <- c("lower", "upper")
+names(test2) <- c("lower", "upper")
+
+ggplot(test2, aes(x=chicago$number))+
+  # geom_line(aes(y=lower, col="lower"))+
+  # geom_line(aes(y=upper, col="upper"))+
+  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.6)+
+  geom_line(aes(y=chicago$cases, col="data"))+
+  geom_line(aes(y=test$Cases, col="sim"))
+
+
+chicago_baseline <- Sim(beta=rep_len(chicago_accuracy$beta_estimate, length.out = 
+                        546), city=chicago, s_prop=chicago_initials[[3]][2],
+                        i_prop=chicago_initials[[3]][1], plot=FALSE)
+
+
+test_function <- function(x){
+  if(chicago_baseline$Cases[x] < test2[x,1]){
+    dif <- test2[x,1] - chicago_baseline$Cases[x]
+    return(dif)
+  }
+  if(chicago_baseline$Cases[x] > test2[x,2]){
+    dif <-chicago_baseline$Cases[x] - test2[x,2]
+    return(dif)
+  }
+  else{return(0)}
+}
+
+summary(sapply(seq(1, 546,1), test_function))
 ```
 
 
+```{r}
+min(ny_accuracy$beta_estimate)
+min(ny_betas)
+
+min(chicago_accuracy$beta_estimate)
+min(chicago_betas)
+
+min(indianapolis_accuracy$beta_estimate)
+min(indianapolis_betas)
+
+min(spokane_accuracy$beta_estimate)
+min(spokane_betas)
+
+min(neworleans_accuracy$beta_estimate)
+min(neworleans_betas)
+```
 
 
 
