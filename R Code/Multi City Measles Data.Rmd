@@ -88,17 +88,17 @@ gaussian_sum <- function(i, m) {
 }
 
 gaussian_regression <- function(city, scale){
-  cumbirths <- cumsum(city$rec)
-  cumcases <- as.numeric(cumsum(city$cases))
+  cumbirths <- cumsum(city$rec) #cumsum of the births
+  cumcases <- as.numeric(cumsum(city$cases)) #cumsum of the reported cases
   
   ord <- order(cumcases)
   c.cases <- cumcases[ord] 
   c.births <- cumbirths[ord] 
 
-  m <- floor(length(cumcases)*(scale)) #SCALE GOES HERE
+  m <- floor(length(cumcases)*(scale)) #neighborhood width
   h <- m/2
 
-  x0<-0
+  x0<-0 
   diffs<-matrix(nrow=length(cumcases), ncol=length(cumcases))
   which.diff<-0
   x.n <- matrix(nrow=length(cumcases), ncol=m)
@@ -107,9 +107,9 @@ gaussian_regression <- function(city, scale){
   for(i in 1:length(cumcases)){
   x0[i] <- c.cases[i] #set focal x 
   diffs[i,] <- abs(c.cases - x0[i]) #difference between each datapoint and x0 (x value difference)
-  which.diff[i] <- sort(diffs[i,])[m] #This returns the mth smallest difference between c.births (did I mean c.cases? I must have.) and x0. 
+  which.diff[i] <- sort(diffs[i,])[m] #This returns the mth smallest difference between c.cases and x0. 
 
-  if(length(c.cases[diffs[i,] <= which.diff[i]])<m){
+  if(length(c.cases[diffs[i,] <= which.diff[i]])<m){ #conditional statement used because sometimes the way m is rounded makes the length of x.n[i,] off by one observation
     x.n[i,] <- c(c.cases[diffs[i,] <= which.diff[i]], rep(0, length.out=(m-length(c.cases[diffs[i,] <= which.diff[i]])))) #select m closest x values to focal x
   y.n[i,] <- c(c.births[diffs[i,] <= which.diff[i]], 0) #select m closest corresponding y valeus 
   }
@@ -119,7 +119,7 @@ gaussian_regression <- function(city, scale){
   }
   }
   
-
+#These are functions that basically just create the gaussian weight funciton
 gaussian_kernel <- function(x) {
   (1/sqrt(2*pi))*exp(-x^2/2)
 }
@@ -132,6 +132,7 @@ gaussian_sum <- function(i, m) {
     }
 }
   
+#apply weight function 
   x.wt.gaus <- matrix(nrow=length(cumcases), ncol=m)
   x.coeffs.gaus <- 0
   for(i in 1:length(cumcases)){
@@ -140,8 +141,10 @@ gaussian_sum <- function(i, m) {
   }
   }
   
+  #run a weighted linear regression for each timepoint (output is 546 weighted regressions) 
   reg.gaus <- lapply(1:length(cumcases), function(x) lm(y.n[x,]~x.n[x,], weights = x.wt.gaus[x,]))
 
+  #extract coefficients (rho values) and fitted y values (in order to eventually calculate the residuals/Z dynamics)
   x.coeffs.gaus <-0
   x.intercept.gaus <-0
   y.fit.gaus <- 0
@@ -151,14 +154,7 @@ gaussian_sum <- function(i, m) {
     y.fit.gaus[i] <- x.coeffs.gaus[i]*c.cases[i]+x.intercept.gaus[i]
   }
 
-T <- seq(1, 546, 1)  
-x.coeffs.gaus.smooth <- fitted(loess(x.coeffs.gaus ~ T))
-y.fit.gaus.smooth <-0
-for(i in 1:length(x.coeffs.gaus.smooth)){
-  y.fit.gaus.smooth[i] <- x.coeffs.gaus.smooth[i]*c.cases[i] + x.intercept.gaus[i]
-}
-
-return(list(y.fit.gaus=y.fit.gaus, y.fit.gaus.smooth=y.fit.gaus.smooth, x.coeffs.gaus=x.coeffs.gaus, x.coeffs.gaus.smooth=x.coeffs.gaus.smooth))
+return(list(y.fit.gaus=y.fit.gaus, x.coeffs.gaus=x.coeffs.gaus))
 }
 
 y_hat_linear <- function(x,y){
@@ -862,13 +858,25 @@ confidence_interval <- function(x){
   return(c(lower,upper))
 }
 
+confidence_interval2 <- function(x){
+  a<-chicago_baseline$Cases[x]
+  s <- sd(chicago_cases[,x])
+  n<-nrow(chicago_cases)
+  
+  error <- qt(0.975,df=n-1)*s/sqrt(n)
+  lower <- a-error
+  upper <- a+error
+  
+  return(c(lower,upper))
+}
+
 credible_interval <- function(x){
   lower <- quantile(x, probs=.025, names=FALSE)
   upper <- quantile(x, probs=.975, names=FALSE)
   return(c(lower, upper))
 }
 
-test <- as.data.frame(t(apply(chicago_cases, MARGIN=2, confidence_interval))) #rows are upper/lower, columns are time points
+test <- as.data.frame(t(sapply(seq(1, 546, 1), confidence_interval2))) #rows are upper/lower, columns are time points
 test2 <- as.data.frame(t(apply(chicago_cases, MARGIN=2, credible_interval)))
 
 names(test) <- c("lower", "upper")
