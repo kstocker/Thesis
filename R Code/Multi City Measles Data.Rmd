@@ -835,6 +835,10 @@ chicago_1000_sims <- apply(chicago_betasample, MARGIN=1, function(x)
  
 print(g)
 
+#save(chicago_1000_sims, file="chicago_1000_sims")
+
+load("/Users/Kaitlyn/Documents/Github/Thesis Git/R Code/chicago_1000_sims")
+
 #need to 1) make vector of length 1000 for each time point (cases at time 1, cases at time 2, etc). 2) find 95% confidence interval at each point 
 
 
