@@ -917,20 +917,50 @@ summary(sapply(seq(1, 546,1), test_function))
 
 
 ```{r}
-min(ny_accuracy$beta_estimate)
-min(ny_betas)
+interval_plot <- function(city, bayes, initials, accuracy){
 
-min(chicago_accuracy$beta_estimate)
-min(chicago_betas)
+  baseline <- Sim(beta=rep_len(accuracy$beta_estimate, length.out = 
+                        546), city=city, s_prop=initials[[3]][2],
+                        i_prop=initials[[3]][1], plot=FALSE)
 
-min(indianapolis_accuracy$beta_estimate)
-min(indianapolis_betas)
+  betasample <- extract(bayes)$beta[seq(1,nrow(extract(bayes)$beta),1000),]
 
-min(spokane_accuracy$beta_estimate)
-min(spokane_betas)
 
-min(neworleans_accuracy$beta_estimate)
-min(neworleans_betas)
+  sims <- apply(betasample, MARGIN=1, function(x) 
+                           Sim(beta=rep_len(x, length.out = 546), city=city, 
+                               s_prop=initials[[3]][2], i_prop = 
+                               initials[[3]][1], plot=FALSE))
+
+
+  #need to 1) make vector of length 1000 for each time point (cases at time 1, cases   at time 2, etc). 2) find 95% credible interval at each point 
+
+  cases <- data.frame()
+  for(i in 1:1000){
+    for(j in 1:546){
+      cases[i,j] <- sims[[i]]$Cases[j]
+    }
+  }
+
+
+  credible_interval <- function(x){
+    lower <- quantile(x, probs=.025, names=FALSE)
+    upper <- quantile(x, probs=.975, names=FALSE)
+    return(c(lower, upper))
+  }
+
+  test <- as.data.frame(t(apply(cases, MARGIN=2, credible_interval)))
+
+  names(test) <- c("lower", "upper")
+
+  interval_plot <- ggplot(test, aes(x=city$number))+
+    geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.6)+
+    geom_line(aes(y=city$cases, col="data"))+
+    geom_line(aes(y=baseline$Cases, col="sim"))+
+    labs(x="Biweek", y="Cases", title=paste0(city, "Simulation"))
+
+return(list(sims = sims, interval_plot=interval_plot))
+}
+ny_intervalplot <- interval_plot(city=newyork, bayes=ny_bayes, initials=ny_initials, accuracy=ny_accuracy)
 ```
 
 
